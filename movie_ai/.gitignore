@@ -56,6 +56,12 @@ saved/
 chroma_db/
 *.db
 
+# Models (大模型文件)
+models/
+*.bin
+*.safetensors
+*.onnx
+
 # Temporary files
 *.tmp
 *.bak

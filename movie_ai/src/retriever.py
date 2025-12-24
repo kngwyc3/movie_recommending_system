@@ -7,8 +7,8 @@ from rank_bm25 import BM25Okapi
 
 from src.config import Config
 from src.embeddeding import embedding_service
+from src.bm25_builder import preprocess_text
 from scripts.db_connection import db_connection
-import jieba
 
 class Retriever:
     """检索器类 - 只负责检索"""
@@ -49,7 +49,7 @@ class Retriever:
         results = self.collection.query(
             query_embeddings=[query_embedding.tolist()],
             n_results=top_k,
-            include=["ids", "documents", "metadatas", "distances"]
+            include=["documents", "metadatas", "distances"]
         )
         
         # 格式化结果
@@ -79,8 +79,8 @@ class Retriever:
         if self.bm25 is None:
             raise RuntimeError("BM25 模型未初始化，请先构建索引")
         
-        # 查询分词
-        tokenized_query = list(jieba.cut(query))
+        # 查询分词（带预处理）
+        tokenized_query = preprocess_text(query)
         
         # BM25 检索
         scores = self.bm25.get_scores(tokenized_query)
