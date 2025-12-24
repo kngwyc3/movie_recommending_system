@@ -9,3 +9,4 @@ pandas==2.0.3
 recbole==0.2.1
 torch==2.0.1
 scipy==1.11.1
+requests==2.31.0

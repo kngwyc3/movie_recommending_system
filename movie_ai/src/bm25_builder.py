@@ -92,8 +92,8 @@ class BM25Builder:
         doc_ids = all_data["ids"]
         print(f"   ✓ 导入 {len(doc_ids)} 条记录")
         
-        # 构建综合搜索文本（标题 + 类型 + 导演 + 演员）
-        print("\n2. 构建搜索文本（标题 + 类型 + 导演 + 演员）...")
+        # 构建综合搜索文本（标题 + 类型 + 描述）
+        print("\n2. 构建搜索文本（标题 + 类型 + 描述）...")
         doc_texts = []
         for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
             parts = []
@@ -101,13 +101,8 @@ class BM25Builder:
                 parts.append(meta['title'])
             if meta.get('genres'):
                 parts.append(meta['genres'])
-            if meta.get('director'):
-                parts.append(meta['director'])
-            if meta.get('cast'):
-                # cast 可能是列表，需要展开
-                cast_list = meta['cast'] if isinstance(meta['cast'], list) else [meta['cast']]
-                parts.extend(cast_list)
-            # 移除 description，减少噪音
+            if doc:
+                parts.append(doc)  # description
             doc_texts.append(" ".join(parts))
         
         print(f"   ✓ 文本构建完成")

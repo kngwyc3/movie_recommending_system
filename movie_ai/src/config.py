@@ -19,7 +19,7 @@ class Config:
     
     # LLM配置 (Qwen3 Max)
     QWEN_API_KEY = os.getenv('QWEN_API_KEY', '')
-    QWEN_API_URL = os.getenv('QWEN_API_URL', 
+    QWEN_API_URL = os.getenv('QWEN_API_URL',
         'https://dashscope.aliyuncs.com/compatible-mode/v1')
     QWEN_MODEL = 'qwen-max'
     QWEN_TEMPERATURE = 0.7

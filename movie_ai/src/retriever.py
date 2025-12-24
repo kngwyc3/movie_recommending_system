@@ -5,9 +5,9 @@ from typing import List, Dict, Any
 import numpy as np
 from rank_bm25 import BM25Okapi
 
-from src.config import Config
 from src.embeddeding import embedding_service
 from src.bm25_builder import preprocess_text
+from utils.translator import translate_to_english
 from scripts.db_connection import db_connection
 
 class Retriever:
@@ -68,19 +68,23 @@ class Retriever:
     def bm25_search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         BM25 检索（关键词匹配）
-        
+
         Args:
-            query: 查询文本
+            query: 查询文本（中文）
             top_k: 返回前K个结果
-            
+
         Returns:
             检索结果列表
         """
         if self.bm25 is None:
             raise RuntimeError("BM25 模型未初始化，请先构建索引")
-        
+
+        # 将中文查询翻译成英文（因为索引是英文的）
+        english_query = translate_to_english(query)
+        print(f"BM25查询翻译: {query} -> {english_query}")
+
         # 查询分词（带预处理）
-        tokenized_query = preprocess_text(query)
+        tokenized_query = preprocess_text(english_query)
         
         # BM25 检索
         scores = self.bm25.get_scores(tokenized_query)
