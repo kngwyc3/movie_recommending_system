@@ -13,7 +13,7 @@ class Config:
     FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     
     # Embedding模型配置
-    EMBEDDING_MODEL_NAME = 'BAAI/bge-small-zh'
+    EMBEDDING_MODEL_NAME = 'D:/code/vue/movie_ai/models/bge-small-zh-v1.5'
     EMBEDDING_DEVICE = 'cpu'  # 'cuda' 或 'cpu'
     EMBEDDING_DIMENSION = 512
     
@@ -21,7 +21,7 @@ class Config:
     QWEN_API_KEY = os.getenv('QWEN_API_KEY', '')
     QWEN_API_URL = os.getenv('QWEN_API_URL', 
         'https://dashscope.aliyuncs.com/compatible-mode/v1')
-    QWEN_MODEL = 'qwen-max-latest'
+    QWEN_MODEL = 'qwen-max'
     QWEN_TEMPERATURE = 0.7
     QWEN_MAX_TOKENS = 1000
     
@@ -39,6 +39,10 @@ class Config:
     DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
     LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'logs')
     
+    # BM25缓存文件
+    CACHE_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+    BM25_CACHE_FILE = os.path.join(CACHE_DIR, 'bm25_index.pkl') 
+
     @classmethod
     def validate(cls):
         """验证配置"""
