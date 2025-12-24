@@ -1,0 +1,11 @@
+Flask==3.0.0
+flask-cors==4.0.0
+sentence-transformers==2.2.2
+chromadb==0.4.22
+openai==1.12.0
+python-dotenv==1.0.0
+numpy==1.24.3
+pandas==2.0.3
+recbole==0.2.1
+torch==2.0.1
+scipy==1.11.1
