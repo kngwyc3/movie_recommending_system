@@ -21,7 +21,7 @@ class Reranker:
         self,
         query: str,
         documents: List[str],
-        top_n: int = 10,
+        top_n: int = 5,
         instruct: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
