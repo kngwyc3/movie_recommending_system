@@ -68,6 +68,65 @@ class QwenTranslator:
         """
         result = self.translate(text, from_lang='zh', to_lang='en')
         return result if result else text
+    
+    def extract_movie_keywords(self, query: str) -> str:
+        """
+        从用户查询中提取电影相关关键词（电影类型、名称等）
+        用于精确的 BM25 查询
+        
+        Args:
+            query: 用户查询（中文）
+        
+        Returns:
+            提取出的关键词，用空格隔开
+        """
+        if not query or not query.strip():
+            return query
+        
+        prompt = """从以下用户查询中提取电影相关的关键词（如电影类型、电影名称等）。
+
+重要提示：
+1. 只返回提取出的关键词，用空格隔开，不要返回其他文字
+2. 如果有中文关键词，要翻译成英文
+3. **电影类型映射表（必须遵守）**：
+   - 爱情片/浪漫片 -> Romance
+   - 科幻片 -> Sci-Fi
+   - 动作片 -> Action
+   - 喜剧片 -> Comedy
+   - 恐怖片 -> Horror
+   - 惊悚片 -> Thriller
+   - 剧情片 -> Drama
+   - 动画片 -> Animation
+   - 冒险片 -> Adventure
+   - 犯罪片 -> Crime
+   - 战争片 -> War
+   - 奇幻片 -> Fantasy
+   - 音乐片 -> Musical
+   - 悬疑片 -> Mystery
+   - 西部片 -> Western
+   - 儿童片 -> Children's
+   - 纪录片 -> Documentary
+   - 黑色电影 -> Film-Noir
+4. 如果无法提取，返回原查询的关键部分
+
+用户查询：{}
+
+关键词：""".format(query)
+        
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=100
+            )
+            keywords = completion.choices[0].message.content.strip()
+            return keywords if keywords else query
+        
+        except Exception as e:
+            print(f"⚠️  关键词提取失败: {e}")
+            # 失败时降级为翻译
+            return self.translate_to_english(query)
 
 
 # 创建全局实例
@@ -81,10 +140,10 @@ def get_translator() -> QwenTranslator:
     return QwenTranslator()
 
 
-# 便捷函数
+# 便揋函数
 def translate_to_english(text: str) -> str:
     """
-    将中文翻译成英文（便捷函数）
+    将中文翻译成英文（便揋函数）
 
     Args:
         text: 中文文本
@@ -94,3 +153,17 @@ def translate_to_english(text: str) -> str:
     """
     translator = get_translator()
     return translator.translate_to_english(text)
+
+
+def extract_movie_keywords(query: str) -> str:
+    """
+    从查询中提取电影相关关键词（便揋函数）
+    
+    Args:
+        query: 用户查询
+    
+    Returns:
+        提取出的关键词
+    """
+    translator = get_translator()
+    return translator.extract_movie_keywords(query)

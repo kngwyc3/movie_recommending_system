@@ -21,8 +21,8 @@ class Config:
     QWEN_API_KEY = os.getenv('QWEN_API_KEY', '')
     QWEN_API_URL = os.getenv('QWEN_API_URL',
         'https://dashscope.aliyuncs.com/compatible-mode/v1')
-    QWEN_MODEL = 'qwen-max'
-    QWEN_TEMPERATURE = 0.7
+    QWEN_MODEL = 'qwen-flash'
+    QWEN_TEMPERATURE = 0.3
     QWEN_MAX_TOKENS = 1000
     
     # ChromaDB配置 (复用movie_back)

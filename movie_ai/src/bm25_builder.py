@@ -28,7 +28,8 @@ ENGLISH_STOPWORDS = {
     'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to',
     'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be',
     'this', 'that', 'these', 'those', 'have', 'has', 'had', 'do',
-    'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might'
+    'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might',
+    'man', 'my', 'de', 'la'  # 添加无意义的通用词和外文冠词
 }
 
 # 合并停用词
@@ -50,8 +51,8 @@ def preprocess_text(text):
     text = text.lower()
     # 分词
     tokens = list(jieba.cut(text))
-    # 过滤停用词和短词
-    tokens = [t for t in tokens if t.strip() and len(t) > 1 and t not in STOPWORDS]
+    # 过滤停用词、短词、和4位数字（年份）
+    tokens = [t for t in tokens if t.strip() and len(t) > 1 and t not in STOPWORDS and not (len(t) == 4 and t.isdigit())]
     return tokens
 
 
@@ -92,8 +93,8 @@ class BM25Builder:
         doc_ids = all_data["ids"]
         print(f"   ✓ 导入 {len(doc_ids)} 条记录")
         
-        # 构建综合搜索文本（标题 + 类型 + 描述）
-        print("\n2. 构建搜索文本（标题 + 类型 + 描述）...")
+        # 构建搜索文本（只使用标题 + 类型，确保精确查找）
+        print("\n2. 构建搜索文本（标题 + 类型）...")
         doc_texts = []
         for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
             parts = []
@@ -101,11 +102,9 @@ class BM25Builder:
                 parts.append(meta['title'])
             if meta.get('genres'):
                 parts.append(meta['genres'])
-            if doc:
-                parts.append(doc)  # description
             doc_texts.append(" ".join(parts))
         
-        print(f"   ✓ 文本构建完成")
+        print(f"   ✓ 文本构建完成（共 {len(doc_texts)} 个文档）")
         
         # 中文分词（带预处理）
         print(f"\n3. 中文分词（带预处理）...")
@@ -118,7 +117,7 @@ class BM25Builder:
         # 构建 BM25 模型
         print(f"\n4. 构建 BM25 模型...")
         bm25 = BM25Okapi(tokenized_corpus)
-        print(f"   ✓ 模型构建完成")
+        print(f"   ✓ 模型构建完成（使用精简索引：标题+类型）")
         
         # 保存到缓存
         print(f"\n5. 保存缓存...")
@@ -137,8 +136,8 @@ class BM25Builder:
         print(f"   ✓ 缓存已保存到: {self.cache_path}")
 
         print("\n" + "=" * 50)
-        print("BM25 索引构建完成!")
-        print("=" * 50)
+        print("✅ BM25 索引构建完成 (精简模式：标题+类型)")
+        print("="*50)
 
         return bm25, doc_ids, tokenized_corpus
     
@@ -162,11 +161,11 @@ class BM25Builder:
 
         # 兼容旧缓存：如果没有 tokenized_corpus，则使用预处理生成
         if 'tokenized_corpus' in cache_data:
-            return cache_data['bm25'], cache_data['doc_ids'], cache_data['tokenized_corpus']
+            return cache_data['bm25'], cache_data['doc_ids'], cache_data['doc_texts']
         else:
             from src.bm25_builder import preprocess_text
             tokenized_corpus = [preprocess_text(text) for text in cache_data['doc_texts']]
-            return cache_data['bm25'], cache_data['doc_ids'], tokenized_corpus
+            return cache_data['bm25'], cache_data['doc_ids'], cache_data['doc_texts']
     
     def build_or_load(self, collection, force_rebuild: bool = False):
         """

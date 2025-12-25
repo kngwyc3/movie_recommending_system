@@ -21,13 +21,10 @@ class EmbeddingService:
     def load_model(self):
         """加载 embedding 模型（仅从本地加载）"""
         if self.model is None:
-            print(f"正在加载本地 Embedding 模型: {Config.EMBEDDING_MODEL_NAME}")
             self.model = SentenceTransformer(
                 Config.EMBEDDING_MODEL_NAME,
-                local_files_only=True  # 仅从本地加载，不下载
+                device=self.device
             )
-            self.model.to(self.device)
-            print(f"✅ Embedding 模型加载完成 (设备: {self.device})")
         return self.model
     
     def encode(self, texts: Union[str, List[str]], batch_size: int = 32) -> np.ndarray:
@@ -52,7 +49,7 @@ class EmbeddingService:
         embeddings = self.model.encode(
             texts,
             batch_size=batch_size,
-            show_progress_bar=True,
+            show_progress_bar=False,
             convert_to_numpy=True,
             normalize_embeddings=True  # 归一化
         )

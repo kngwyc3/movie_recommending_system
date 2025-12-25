@@ -1,2 +1,0 @@
-关键词搜索（首页搜索框）：BM25 → 重排序 → 返回列表（不用 LangChain）
-AI 推荐（带解释）：混合检索 → 重排序 → LangChain RAG → 结构化输出（用 LangChain）

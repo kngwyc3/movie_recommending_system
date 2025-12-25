@@ -3,15 +3,24 @@
 """
 from typing import List, Dict, Any
 import numpy as np
+import pickle
+import os
 from rank_bm25 import BM25Okapi
 
 from src.embeddeding import embedding_service
 from src.bm25_builder import preprocess_text
-from utils.translator import translate_to_english
+from src.config import Config
+from utils.translator import extract_movie_keywords
 from scripts.db_connection import db_connection
 
 class Retriever:
     """检索器类 - 只负责检索"""
+    
+    # 类变量 - 全局缓存（所有实例共享，只加载一次）
+    _bm25_cache = None
+    _doc_ids_cache = None
+    _doc_texts_cache = None
+    _cache_loaded = False
     
     def __init__(self, bm25: BM25Okapi = None, doc_ids: List[str] = None, 
                  doc_texts: List[str] = None):
@@ -23,13 +32,49 @@ class Retriever:
             doc_ids: 文档 ID 列表
             doc_texts: 文档文本列表
         """
-        self.bm25 = bm25
-        self.doc_ids = doc_ids or []
-        self.doc_texts = doc_texts or []
+        # 如果还没有加载全局缓存，则加载一次
+        if not Retriever._cache_loaded and bm25 is None:
+            Retriever._load_bm25_cache()
+        
+        # 使用提供的参数或使用缓存的数据
+        self.bm25 = bm25 or Retriever._bm25_cache
+        self.doc_ids = doc_ids or Retriever._doc_ids_cache or []
+        self.doc_texts = doc_texts or Retriever._doc_texts_cache or []
         
         # 连接数据库
         db_connection.connect()
         self.collection = db_connection.get_collection()
+    
+    @classmethod
+    def _load_bm25_cache(cls):
+        """
+        加载 BM25 索引到全局缓存（只执行一次）
+        """
+        if cls._cache_loaded:
+            return
+        
+        try:
+            cache_file = Config.BM25_CACHE_FILE
+            if os.path.exists(cache_file):
+                with open(cache_file, 'rb') as f:
+                    data = pickle.load(f)
+                
+                cls._bm25_cache = data['bm25']
+                cls._doc_ids_cache = data['doc_ids']
+                cls._doc_texts_cache = data['doc_texts']
+            else:
+                print(f"⚠️  BM25 索引文件不存在: {cache_file}")
+        except Exception as e:
+            print(f"⚠️  BM25 索引加载失败: {e}")
+        finally:
+            cls._cache_loaded = True  # 标记已尝试加载，避免重复
+    
+    @classmethod
+    def preload_bm25(cls):
+        """
+        主动预加载 BM25 索引（可选）
+        """
+        cls._load_bm25_cache()
     
     def vector_search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -44,6 +89,10 @@ class Retriever:
         """
         # 生成查询的 embedding
         query_embedding = embedding_service.encode(query)
+        
+        # 确保是一维数组
+        if query_embedding.ndim > 1:
+            query_embedding = query_embedding.flatten()
         
         # 在 ChromaDB 中搜索
         results = self.collection.query(
@@ -79,12 +128,11 @@ class Retriever:
         if self.bm25 is None:
             raise RuntimeError("BM25 模型未初始化，请先构建索引")
 
-        # 将中文查询翻译成英文（因为索引是英文的）
-        english_query = translate_to_english(query)
-        print(f"BM25查询翻译: {query} -> {english_query}")
+        # 从查询中提取关键词（电影类型、名称等，不发散）
+        keywords = extract_movie_keywords(query)
 
         # 查询分词（带预处理）
-        tokenized_query = preprocess_text(english_query)
+        tokenized_query = preprocess_text(keywords)
         
         # BM25 检索
         scores = self.bm25.get_scores(tokenized_query)
@@ -130,55 +178,22 @@ class Retriever:
         vector_results = self.vector_search(query, top_k * 2)
         bm25_results = self.bm25_search(query, top_k * 2)
         
-        # 合并结果
-        combined_scores = {}
+        # 合并结果 (只做去重合并)
+        combined_docs = {}
         
+        # 添加向量检索结果
         for result in vector_results:
             doc_id = result['id']
-            if doc_id not in combined_scores:
-                combined_scores[doc_id] = {
-                    'vector_score': 0.0,
-                    'bm25_score': 0.0,
-                    'data': result
-                }
-            combined_scores[doc_id]['vector_score'] = result['score']
+            combined_docs[doc_id] = result
         
+        # 添加 BM25 检索结果 (不改变向量结果)
         for result in bm25_results:
             doc_id = result['id']
-            if doc_id not in combined_scores:
-                combined_scores[doc_id] = {
-                    'vector_score': 0.0,
-                    'bm25_score': 0.0,
-                    'data': result
-                }
-            combined_scores[doc_id]['bm25_score'] = result['score']
+            if doc_id not in combined_docs:
+                combined_docs[doc_id] = result
         
-        # 归一化分数并计算混合分数
-        vector_scores = [v['vector_score'] for v in combined_scores.values()]
-        bm25_scores = [v['bm25_score'] for v in combined_scores.values()]
-        
-        max_vector = max(vector_scores) if vector_scores else 1.0
-        max_bm25 = max(bm25_scores) if bm25_scores else 1.0
-        
-        for data in combined_scores.values():
-            normalized_vector = data['vector_score'] / max_vector
-            normalized_bm25 = data['bm25_score'] / max_bm25
-            data['combined_score'] = alpha * normalized_vector + (1 - alpha) * normalized_bm25
-        
-        # 排序并返回 top_k
-        sorted_results = sorted(
-            combined_scores.items(),
-            key=lambda x: x[1]['combined_score'],
-            reverse=True
-        )[:top_k]
-        
-        # 格式化结果
-        retrievals = []
-        for doc_id, data in sorted_results:
-            result = data['data'].copy()
-            result['score'] = data['combined_score']
-            result['method'] = 'hybrid'
-            retrievals.append(result)
+        # 转换为列表并返回 top_k
+        retrievals = list(combined_docs.values())[:top_k]
         
         return retrievals
     

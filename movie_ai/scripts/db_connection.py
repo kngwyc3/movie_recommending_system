@@ -36,7 +36,6 @@ class DBConnection:
         if db_path is None:
             db_path = Config.CHROMA_DB_PATH
         
-        print(f"正在连接到 ChromaDB: {db_path}")
         self.client = chromadb.PersistentClient(
             path=db_path,
             settings=Settings(
@@ -48,14 +47,11 @@ class DBConnection:
         # 获取或创建集合
         try:
             self.collection = self.client.get_collection(name=self.collection_name)
-            print(f"✅ 已连接到集合: {self.collection_name}")
-            print(f"   记录数: {self.collection.count()}")
         except Exception:
             self.collection = self.client.create_collection(
                 name=self.collection_name,
                 metadata={"description": "MovieLens 电影数据库"}
             )
-            print(f"✅ 创建新集合: {self.collection_name}")
     
     def get_collection(self):
         """获取集合实例"""
