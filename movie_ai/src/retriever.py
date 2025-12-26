@@ -104,13 +104,16 @@ class Retriever:
         # 格式化结果
         retrievals = []
         for i in range(len(results['ids'][0])):
-            retrievals.append({
-                'id': results['ids'][0][i],
-                'document': results['documents'][0][i],
-                'metadata': results['metadatas'][0][i],
-                'score': 1 - results['distances'][0][i],
-                'method': 'vector'
-            })
+            score = 1 - results['distances'][0][i]
+            # 过滤分数低于 0.1 的结果
+            if score >= 0.1:
+                retrievals.append({
+                    'id': results['ids'][0][i],
+                    'document': results['documents'][0][i],
+                    'metadata': results['metadatas'][0][i],
+                    'score': score,
+                    'method': 'vector'
+                })
         
         return retrievals
     
@@ -158,47 +161,57 @@ class Retriever:
         
         return retrievals
     
-    def hybrid_search(self, query: str, top_k: int = 5, 
-                     alpha: float = 0.5) -> List[Dict[str, Any]]:
+    def hybrid_search(self, query: str, top_k: int = 5,
+                     alpha: float = 0.5, separate: bool = False) -> Dict[str, List[Dict[str, Any]]]:
         """
         混合检索（向量 + BM25）
-        
+
         Args:
             query: 查询文本
             top_k: 返回前K个结果
             alpha: 向量检索权重 (0-1)
-            
+            separate: 是否分别返回向量检索和BM25结果
+
         Returns:
-            检索结果列表
+            如果 separate=True，返回 {'vector_results': ..., 'bm25_results': ..., 'combined_results': ...}
+            如果 separate=False，返回合并后的检索结果列表
         """
         if self.bm25 is None:
             raise RuntimeError("BM25 模型未初始化，请先构建索引")
-        
+
         # 分别获取两种检索结果
         vector_results = self.vector_search(query, top_k * 2)
         bm25_results = self.bm25_search(query, top_k * 2)
-        
+
         # 合并结果 (只做去重合并)
         combined_docs = {}
-        
+
         # 添加向量检索结果
         for result in vector_results:
             doc_id = result['id']
             combined_docs[doc_id] = result
-        
+
         # 添加 BM25 检索结果 (不改变向量结果)
         for result in bm25_results:
             doc_id = result['id']
             if doc_id not in combined_docs:
                 combined_docs[doc_id] = result
-        
+
         # 转换为列表并返回 top_k
-        retrievals = list(combined_docs.values())[:top_k]
-        
-        return retrievals
+        combined_results = list(combined_docs.values())[:top_k]
+
+        # 根据参数返回不同格式
+        if separate:
+            return {
+                'vector_results': vector_results,
+                'bm25_results': bm25_results,
+                'combined_results': combined_results
+            }
+        else:
+            return combined_results
     
     def search(self, query: str, method: str = 'hybrid', 
-               top_k: int = 5, **kwargs) -> List[Dict[str, Any]]:
+               top_k: int = 3, **kwargs) -> List[Dict[str, Any]]:
         """
         统一检索接口
         

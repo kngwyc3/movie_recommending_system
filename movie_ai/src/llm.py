@@ -22,10 +22,12 @@ class QwenLLM:
             model=self.model,
             messages=messages,
             temperature=Config.QWEN_TEMPERATURE,
-            max_tokens=Config.QWEN_MAX_TOKENS
+            max_tokens=Config.QWEN_MAX_TOKENS,
+            presence_penalty=Config.QWEN_PRESENCE_PENALTY,  # 抑制重复主题
+            frequency_penalty=Config.QWEN_FREQUENCY_PENALTY  # 抑制重复词语
         )
         return response.choices[0].message.content
-    
+
     def stream(self, messages: List[Dict[str, str]]) -> Iterator:
         """流式调用 LLM 生成回复"""
         return self.client.chat.completions.create(
@@ -33,5 +35,7 @@ class QwenLLM:
             messages=messages,
             temperature=Config.QWEN_TEMPERATURE,
             max_tokens=Config.QWEN_MAX_TOKENS,
-            stream=True
+            stream=True,
+            presence_penalty=Config.QWEN_PRESENCE_PENALTY,  # 抑制重复主题
+            frequency_penalty=Config.QWEN_FREQUENCY_PENALTY  # 抑制重复词语
         )

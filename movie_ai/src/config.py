@@ -24,6 +24,8 @@ class Config:
     QWEN_MODEL = 'qwen-flash'
     QWEN_TEMPERATURE = 0.3
     QWEN_MAX_TOKENS = 1000
+    QWEN_PRESENCE_PENALTY = 0.6  # 抑制重复主题
+    QWEN_FREQUENCY_PENALTY = 0.6  # 抑制重复词语
     
     # ChromaDB配置 (复用movie_back)
     # 使用持久化模式，共享movie_back的chroma_db目录
@@ -31,9 +33,8 @@ class Config:
     CHROMA_COLLECTION_NAME = 'movie_ai_collection'  # RAG专用的collection
     
     # RAG配置
-    TOP_K = 5  # 检索Top-K相关文档
-    CHUNK_SIZE = 200  # 文本分块大小
-    CHUNK_OVERLAP = 50  # 分块重叠
+    TOP_K = 5  # 检索Top-K相关文档（向量和BM25各检索TOP_K条）
+    RERANK_TOP_N = 3  # 重排序后返回Top-N条推荐
     
     # 数据路径
     DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
