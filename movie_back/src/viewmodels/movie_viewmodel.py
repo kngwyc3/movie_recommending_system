@@ -1,7 +1,7 @@
 """
 Movie ViewModel - 电影视图模型/业务逻辑层
 """
-from src.repositories.movie_repository import movie_repository
+from repositories.movie_repository import movie_repository
 
 
 class MovieViewModel:

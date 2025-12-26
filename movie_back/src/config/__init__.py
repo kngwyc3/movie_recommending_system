@@ -1,6 +1,10 @@
 """
-Config package
+配置模块初始化
 """
-from .database import db, Database
+from config.app_config import app, get_upload_folder, get_allowed_extensions
 
-__all__ = ['db', 'Database']
+__all__ = [
+    'app',
+    'get_upload_folder',
+    'get_allowed_extensions',
+]
