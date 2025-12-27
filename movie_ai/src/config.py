@@ -21,8 +21,8 @@ class Config:
     QWEN_API_KEY = os.getenv('QWEN_API_KEY', '')
     QWEN_API_URL = os.getenv('QWEN_API_URL',
         'https://dashscope.aliyuncs.com/compatible-mode/v1')
-    QWEN_MODEL = 'qwen-flash'
-    QWEN_TEMPERATURE = 0.3
+    QWEN_MODEL = 'qwen-max'
+    QWEN_TEMPERATURE = 0.7
     QWEN_MAX_TOKENS = 1000
     QWEN_PRESENCE_PENALTY = 0.6  # 抑制重复主题
     QWEN_FREQUENCY_PENALTY = 0.6  # 抑制重复词语
