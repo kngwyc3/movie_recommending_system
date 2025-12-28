@@ -110,12 +110,22 @@ class UserViewModel:
     
     def add_watch_history(self, user_id, movie_id):
         """添加观看历史"""
+        print(f'🔍 UserViewModel.add_watch_history: user_id={user_id}, movie_id={movie_id}')
         user = user_repository.find_by_id(user_id)
         if not user:
+            print(f'❌ 用户不存在: user_id={user_id}')
             return False
         
+        print(f'✅ 找到用户: {user.username}')
         user.add_watch_history(movie_id)
-        user_repository.update(user)
+        print(f'📝 观看历史已更新，当前历史数量: {len(user.watch_history)}')
+        
+        updated_user = user_repository.update(user)
+        if not updated_user:
+            print(f'❌ 更新用户失败')
+            return False
+            
+        print(f'✅ 用户更新成功')
         return True
     
     def rate_movie(self, user_id, movie_id, rating):

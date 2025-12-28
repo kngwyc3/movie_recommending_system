@@ -136,7 +136,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useStars } from '../composables/useStars';
 import { useParticles } from '../composables/useParticles';
 import MovieCard from '../components/MovieCard.vue';
-import MovieAssistant from '../components/MovieAssistant.vue';
+import MovieAssistant from '../components/MovieAssistantAI.vue';
 import UserMenu from '../components/UserMenu.vue';
 import { movieApi, buildResourceUrl, getReliableImageUrl } from '../api/movies';
 import { resolvePoster } from '../utils/poster';

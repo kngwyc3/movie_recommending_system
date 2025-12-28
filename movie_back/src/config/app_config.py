@@ -32,11 +32,15 @@ app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=10)
 # ==================== 文件上传配置 ====================
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB最大文件大小
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-UPLOAD_FOLDER = 'uploads/avatars'
+
+# 使用绝对路径，确保文件保存在 movie_back/uploads/avatars
+movie_back_dir = os.path.dirname(os.path.dirname(current_dir))  # 从 config -> src -> movie_back
+UPLOAD_FOLDER = os.path.join(movie_back_dir, 'uploads', 'avatars')
 
 # 创建上传目录
 if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    print(f"📁 创建上传目录: {UPLOAD_FOLDER}")
 
 # ==================== CORS 配置 ====================
 CORS(app, resources={

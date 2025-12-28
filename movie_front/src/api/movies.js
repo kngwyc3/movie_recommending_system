@@ -75,21 +75,12 @@ async function request(url, options = {}) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    console.log('API 请求:', {
-      url: `${API_BASE_URL}${url}`,
-      headers: Object.keys(headers).filter(k => k !== 'Authorization').reduce((acc, k) => ({ ...acc, [k]: headers[k] }), {}),
-      hasToken: !!token
-    });
-
     const response = await fetch(`${API_BASE_URL}${url}`, {
       headers,
       ...options
     });
 
-    console.log('API 响应状态:', response.status, response.ok);
-
     const data = await response.json();
-    console.log('API 响应完整数据:', JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       throw new Error(data.message || data.error || `请求失败 (${response.status})`);
@@ -97,7 +88,6 @@ async function request(url, options = {}) {
 
     // 如果后端返回 { success: true, data: {...} 格式，则返回data字段
     if (data.success && data.data !== undefined) {
-      console.log('API 返回的data字段:', data.data);
       return data.data;
     }
 

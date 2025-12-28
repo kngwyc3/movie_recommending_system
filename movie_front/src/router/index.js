@@ -59,28 +59,62 @@ const router = createRouter({
   }
 });
 
-// 全局路由守卫：检查登录状态
-router.beforeEach((to, from, next) => {
+// 全局路由守卫：检查登录状态和token有效性
+router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('token');
-  const isLoggedIn = token !== null && token !== '';
-
-  // 检查页面是否需要登录
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
 
-  console.log('路由守卫:', {
-    to: to.path,
-    from: from.path,
-    requiresAuth,
-    isLoggedIn
-  });
+  // 如果需要认证
+  if (requiresAuth) {
+    if (!token) {
+      // 没有token，跳转到登录页
+      next({
+        path: '/login',
+        query: { redirect: to.fullPath }
+      });
+      return;
+    }
 
-  if (requiresAuth && !isLoggedIn) {
-    // 未登录访问需要认证的页面，跳转到登录页
-    next({
-      path: '/login',
-      query: { redirect: to.fullPath }
-    });
-  } else if ((to.path === '/login' || to.path === '/register') && isLoggedIn) {
+    // 验证token是否有效
+    try {
+      const response = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ token })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        // token无效或过期，清除登录状态
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('isLoggedIn');
+        
+        next({
+          path: '/login',
+          query: { redirect: to.fullPath }
+        });
+        return;
+      }
+
+      // token有效，继续导航
+      next();
+    } catch (error) {
+      console.error('Token验证失败:', error);
+      // 验证失败，清除登录状态
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('isLoggedIn');
+      
+      next({
+        path: '/login',
+        query: { redirect: to.fullPath }
+      });
+    }
+  } else if ((to.path === '/login' || to.path === '/register') && token) {
     // 已登录用户访问登录/注册页，跳转到首页
     next('/');
   } else {

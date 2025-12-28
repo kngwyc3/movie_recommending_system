@@ -54,8 +54,6 @@ const checkAuthStatus = () => {
   const loggedIn = localStorage.getItem('isLoggedIn');
   const userData = localStorage.getItem('user');
 
-  console.log('检查登录状态:', { token, loggedIn, userData });
-
   if (token && loggedIn === 'true' && userData) {
     const parsedUser = JSON.parse(userData);
     isLoggedIn.value = true;
@@ -71,15 +69,15 @@ const checkAuthStatus = () => {
 onMounted(() => {
   checkAuthStatus();
 
-  // 监听 localStorage 变化
+  // 监听 localStorage 变化（跨标签页）
   window.addEventListener('storage', checkAuthStatus);
-
-  // 定时检查登录状态（用于同页面更新）
-  const checkInterval = setInterval(checkAuthStatus, 500);
+  
+  // 监听自定义事件（同页面内）
+  window.addEventListener('userUpdated', checkAuthStatus);
 
   onUnmounted(() => {
-    clearInterval(checkInterval);
     window.removeEventListener('storage', checkAuthStatus);
+    window.removeEventListener('userUpdated', checkAuthStatus);
   });
 });
 </script>

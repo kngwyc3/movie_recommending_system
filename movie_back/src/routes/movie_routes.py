@@ -107,13 +107,19 @@ def register_routes(app):
     def get_movie_detail(movie_id):
         """获取电影详情"""
         try:
+            print(f'🔍 请求电影详情 ID: {movie_id}, 类型: {type(movie_id)}')
             movie = movie_viewmodel.get_movie_by_id(movie_id)
+            print(f'📽️ 查询结果: {movie}')
 
             if movie is None:
+                print(f'❌ 电影不存在: {movie_id}')
                 return bad_request_response('电影不存在', status_code=404)
 
             return success_response(movie)
         except Exception as e:
+            print(f'❌ 获取电影详情异常: {str(e)}')
+            import traceback
+            traceback.print_exc()
             return error_response(f'获取电影详情失败: {str(e)}')
 
     @app.route('/api/movies', methods=['GET'])

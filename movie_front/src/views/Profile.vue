@@ -710,22 +710,35 @@ const loadUserData = async (userId) => {
       storedUser.avatar = user.value.avatar || '';
       localStorage.setItem('user', JSON.stringify(storedUser));
       console.log('已更新localStorage');
+      
+      // 触发自定义事件，通知其他组件更新（同页面内）
+      window.dispatchEvent(new Event('userUpdated'));
     }
 
     // 获取收藏列表
+    console.log('开始获取收藏列表');
     const favorites = await userApi.getFavorites(userId);
-    if (favorites) {
+    console.log('获取到的收藏数据:', favorites);
+    
+    if (favorites && Array.isArray(favorites)) {
       favoriteMovies.value = favorites.map(item => ({
         id: item.movie_id || item.id,
         title: item.title,
         image: getReliableImageUrl(item.poster || item.image, '200', '300')
       }));
       stats.value.favorites = favoriteMovies.value.length;
+    } else {
+      console.warn('收藏数据不是数组:', favorites);
+      favoriteMovies.value = [];
+      stats.value.favorites = 0;
     }
 
     // 获取观看历史
+    console.log('开始获取观看历史');
     const history = await userApi.getHistory(userId);
-    if (history) {
+    console.log('获取到的历史数据:', history);
+    
+    if (history && Array.isArray(history)) {
       watchHistory.value = history.map(item => ({
         id: item.movie_id || item.id,
         title: item.title,
@@ -735,10 +748,17 @@ const loadUserData = async (userId) => {
         rating: item.rating || 0
       }));
       stats.value.history = watchHistory.value.length;
+    } else {
+      console.warn('历史数据不是数组:', history);
+      watchHistory.value = [];
+      stats.value.history = 0;
     }
 
     // 获取评分列表
+    console.log('开始获取评分列表');
     const ratings = await userApi.getRatings(userId);
+    console.log('获取到的评分数据:', ratings);
+    
     if (ratings) {
       stats.value.ratings = Array.isArray(ratings) ? ratings.length : 0;
     }

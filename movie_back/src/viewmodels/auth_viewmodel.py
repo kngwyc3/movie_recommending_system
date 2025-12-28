@@ -158,11 +158,11 @@ class AuthViewModel:
 
         return None
     
-    def _generate_token(self, user_id, expires_in=7):
-        """生成JWT token"""
+    def _generate_token(self, user_id, expires_in=10):
+        """生成JWT token（默认10分钟过期）"""
         payload = {
             'user_id': user_id,
-            'exp': datetime.utcnow() + timedelta(days=expires_in),
+            'exp': datetime.utcnow() + timedelta(minutes=expires_in),
             'iat': datetime.utcnow()
         }
         

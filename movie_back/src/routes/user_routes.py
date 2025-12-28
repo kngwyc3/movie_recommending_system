@@ -179,13 +179,19 @@ def register_routes(app):
     def add_watch_history(user_id, movie_id):
         """添加观看历史"""
         try:
+            print(f'📝 添加观看历史: user_id={user_id}, movie_id={movie_id}')
             success = user_viewmodel.add_watch_history(user_id, movie_id)
+            print(f'📝 添加结果: {success}')
 
             if not success:
+                print(f'❌ 添加观看历史失败: user_id={user_id}, movie_id={movie_id}')
                 return bad_request_response('添加观看历史失败')
 
             return success_response(None, message='添加观看历史成功')
         except Exception as e:
+            print(f'❌ 添加观看历史异常: {str(e)}')
+            import traceback
+            traceback.print_exc()
             return error_response(f'添加观看历史失败: {str(e)}')
 
     @app.route('/api/user/<int:user_id>/ratings', methods=['GET'])

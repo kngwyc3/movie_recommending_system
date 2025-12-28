@@ -29,16 +29,27 @@ class MovieRepository:
     def find_by_id(self, movie_id):
         """根据ID查找电影"""
         try:
-            results = self.collection.get(ids=[str(movie_id)])
+            print(f'🔍 Repository查找电影 ID: {movie_id}, 类型: {type(movie_id)}')
+            movie_id_str = str(movie_id)
+            print(f'🔍 转换为字符串: {movie_id_str}')
+            
+            results = self.collection.get(ids=[movie_id_str])
+            print(f'📊 ChromaDB查询结果: ids={results["ids"]}, metadatas数量={len(results["metadatas"]) if results["metadatas"] else 0}')
             
             if results['ids'] and len(results['ids']) > 0:
-                return MovieModel.from_metadata(
+                movie = MovieModel.from_metadata(
                     results['ids'][0],
                     results['metadatas'][0]
                 )
+                print(f'✅ 找到电影: {movie.title}')
+                return movie
+            
+            print(f'❌ 未找到电影 ID: {movie_id}')
             return None
         except Exception as e:
             print(f"❌ 查找电影失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def find_all(self, page=1, per_page=12):
