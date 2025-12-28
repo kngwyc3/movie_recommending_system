@@ -1,18 +1,18 @@
 <template>
   <div 
-    class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
-    @click.self="$emit('close')"
+    class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+    :class="isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+    @click.self="closeAssistant"
   >
     <div 
       ref="assistantDialog"
-      class="assistant-dialog fixed bg-gradient-to-b from-[#0f0f1a] to-[#0a0a0f] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] border border-neon-blue/30 overflow-hidden flex flex-col"
+      class="assistant-dialog fixed top-0 right-0 bottom-0 bg-gradient-to-b from-[#0f0f1a] to-[#0a0a0f] shadow-[0_20px_60px_rgba(0,0,0,0.8)] border-l border-neon-blue/30 overflow-hidden flex flex-col transition-transform duration-300"
       :style="dialogStyle"
       @click.stop
     >
-      <!-- 头部拖拽区域 -->
+      <!-- 头部区域 -->
       <div 
-        class="drag-handle bg-gradient-to-r from-neon-blue/20 to-neon-purple/20 p-6 border-b border-neon-blue/20 cursor-move"
-        @mousedown="startDrag"
+        class="bg-gradient-to-r from-neon-blue/20 to-neon-purple/20 p-6 border-b border-neon-blue/20"
       >
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
@@ -29,7 +29,7 @@
             </div>
           </div>
           <button 
-            @click="$emit('close')"
+            @click="closeAssistant"
             class="p-2 hover:bg-white/10 rounded-full transition-colors"
           >
             <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,11 +69,11 @@
         <div 
           v-for="(message, index) in messages" 
           :key="index"
-          :class="['flex', message.isUser ? 'justify-end' : 'justify-start']"
+          :class="['flex group/message', message.isUser ? 'justify-end' : 'justify-start']"
         >
           <div 
             :class="[
-              'max-w-[80%] p-4 rounded-2xl',
+              'max-w-[70%] p-4 rounded-2xl',
               message.isUser 
                 ? 'bg-gradient-to-r from-neon-blue to-neon-purple text-white rounded-br-md' 
                 : 'bg-gray-800/80 text-gray-200 rounded-bl-md'
@@ -103,6 +103,34 @@
             >
               {{ message.time }}
             </span>
+          </div>
+
+          <!-- 操作按钮（仅用户消息显示） -->
+          <div 
+            v-if="message.isUser"
+            class="flex items-center gap-2 ml-2 opacity-0 group-hover/message:opacity-100 transition-opacity"
+          >
+            <!-- 复制按钮 -->
+            <button 
+              @click="copyMessage(message.text)"
+              class="p-2 hover:bg-neon-blue/20 rounded-lg transition-colors"
+              title="复制"
+            >
+              <svg class="w-4 h-4 text-neon-blue" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+              </svg>
+            </button>
+
+            <!-- 删除按钮 -->
+            <button 
+              @click="deleteMessage(index)"
+              class="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+              title="删除此对话"
+            >
+              <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -159,13 +187,14 @@ import { ref, nextTick, watch, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { aiApi } from '../api/ai';
 import { movieApi } from '../api/movies';
+import * as chatApi from '../api/chat';
 
 const emit = defineEmits(['close']);
 const router = useRouter();
 
-// 组件挂载时初始化位置
-onMounted(() => {
-  initializePosition();
+// 组件挂载时设置可见
+onMounted(async () => {
+  isVisible.value = true;
 });
 
 const assistantDialog = ref(null);
@@ -174,20 +203,12 @@ const userInput = ref('');
 const messages = ref([]);
 const isStreaming = ref(false);
 const error = ref(null);
-
-// 拖拽相关状态
-const isDragging = ref(false);
-const dragOffset = ref({ x: 0, y: 0 });
-const dialogPosition = ref({ x: 0, y: 0 });
+const isVisible = ref(false);
 
 // 计算对话框样式
 const dialogStyle = computed(() => ({
-  width: '500px',
-  height: '600px',
-  transform: `translate(${dialogPosition.value.x}px, ${dialogPosition.value.y}px)`,
-  transition: isDragging.value ? 'none' : 'transform 0.2s ease-out, box-shadow 0.3s ease',
-  cursor: isDragging.value ? 'grabbing' : 'default',
-  zIndex: isDragging.value ? 101 : 100
+  width: '400px',
+  transform: isVisible.value ? 'translateX(0)' : 'translateX(100%)',
 }));
 
 const quickQuestions = [
@@ -197,85 +218,87 @@ const quickQuestions = [
   '经典爱情电影'
 ];
 
-// 初始化位置到屏幕中心
-const initializePosition = () => {
-  if (typeof window !== 'undefined') {
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-    const dialogWidth = 500;
-    const dialogHeight = 600;
-
-    dialogPosition.value = {
-      x: (windowWidth - dialogWidth) / 2,
-      y: (windowHeight - dialogHeight) / 2
-    };
+// 监听isVisible变化，加载历史
+watch(isVisible, (newVal) => {
+  if (newVal) {
+    loadChatHistory();
   }
-};
+});
 
-// 开始拖拽
-const startDrag = (e) => {
-  if (e.button !== 0) return;
-  
-  isDragging.value = true;
-  dragOffset.value = {
-    x: e.clientX - dialogPosition.value.x,
-    y: e.clientY - dialogPosition.value.y
-  };
+// 加载聊天历史
+const loadChatHistory = async () => {
+  try {
+    const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
+    if (!userId) {
+      console.log('[AI助手] 用户未登录，跳过加载历史');
+      return;
+    }
 
-  document.body.style.userSelect = 'none';
-  document.body.style.cursor = 'grabbing';
-
-  document.addEventListener('mousemove', handleDrag);
-  document.addEventListener('mouseup', stopDrag);
-  document.addEventListener('mouseleave', stopDrag);
-};
-
-// 处理拖拽
-const handleDrag = (e) => {
-  if (!isDragging.value) return;
-
-  let newX = e.clientX - dragOffset.value.x;
-  let newY = e.clientY - dragOffset.value.y;
-
-  const dialogWidth = 500;
-  const dialogHeight = 600;
-  const windowWidth = window.innerWidth;
-  const windowHeight = window.innerHeight;
-  const minVisible = 50;
-  
-  if (newX + dialogWidth < minVisible) {
-    newX = minVisible - dialogWidth;
+    console.log('[AI助手] 开始加载历史对话，userId:', userId);
+    
+    const history = await chatApi.getChatHistory(userId, 1, 50);
+    
+    if (history && history.chats && history.chats.length > 0) {
+      console.log('[AI助手] 加载到 ' + history.chats.length + ' 条历史对话');
+      
+      // 按时间顺序加载对话（从旧到新），只取最近3条
+      const sortedChats = history.chats
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        .slice(-3);
+      
+      for (const chat of sortedChats) {
+        // 添加用户问题
+        messages.value.push({
+          text: chat.question,
+          isUser: true,
+          time: new Date(chat.created_at).toLocaleTimeString('zh-CN', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })
+        });
+        
+        // 添加AI回答
+        const aiMessage = {
+          text: chat.answer,
+          isUser: false,
+          movies: [],
+          time: new Date(chat.created_at).toLocaleTimeString('zh-CN', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })
+        };
+        
+        // 如果有相关电影，获取详情
+        if (chat.related_movies && chat.related_movies.length > 0) {
+          try {
+            aiMessage.movies = await fetchMovieDetails(chat.related_movies);
+          } catch (err) {
+            console.error('[AI助手] 获取历史对话的电影详情失败:', err);
+          }
+        }
+        
+        messages.value.push(aiMessage);
+      }
+      
+      console.log('[AI助手] 历史对话加载完成，共 ' + messages.value.length + ' 条消息');
+      nextTick(() => scrollToBottom());
+    } else {
+      console.log('[AI助手] 没有历史对话');
+    }
+  } catch (err) {
+    console.error('[AI助手] 加载历史对话失败:', err);
+    // 不显示错误，静默处理
   }
-  if (newX > windowWidth - minVisible) {
-    newX = windowWidth - minVisible;
-  }
-  if (newY < 0) {
-    newY = 0;
-  }
-  if (newY + dialogHeight < minVisible) {
-    newY = minVisible - dialogHeight;
-  }
-  if (newY > windowHeight - minVisible) {
-    newY = windowHeight - minVisible;
-  }
-
-  dialogPosition.value = { x: newX, y: newY };
-};
-
-// 停止拖拽
-const stopDrag = () => {
-  isDragging.value = false;
-  document.body.style.userSelect = '';
-  document.body.style.cursor = '';
-  
-  document.removeEventListener('mousemove', handleDrag);
-  document.removeEventListener('mouseup', stopDrag);
-  document.removeEventListener('mouseleave', stopDrag);
 };
 
 const handleQuickQuestion = (question) => {
   userInput.value = question;
   sendMessage();
+};
+
+const closeAssistant = () => {
+  isVisible.value = false;
+  emit('close');
 };
 
 // 获取电影详情
@@ -385,6 +408,9 @@ const sendMessage = async () => {
           console.log('[AI助手] 流式响应完成');
           isStreaming.value = false;
           nextTick(() => scrollToBottom());
+          
+          // 保存对话到历史
+          saveChatToHistory(text, aiResponse, recommendedMovieIds);
         }
       }
     );
@@ -395,9 +421,90 @@ const sendMessage = async () => {
   }
 };
 
+// 保存对话到历史
+const saveChatToHistory = async (question, answer, relatedMovies) => {
+  try {
+    const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
+    if (!userId) {
+      console.log('[AI助手] 用户未登录，不保存对话');
+      return;
+    }
+
+    console.log('[AI助手] 保存对话到历史...');
+    await chatApi.saveChat(userId, question, answer, relatedMovies);
+    console.log('[AI助手] 对话已保存');
+  } catch (err) {
+    console.error('[AI助手] 保存对话失败:', err);
+    // 不显示错误，静默处理
+  }
+};
+
 const goToMovie = (movieId) => {
   router.push(`/movie/${movieId}`);
   emit('close');
+};
+
+const deleteMessage = async (index) => {
+  // 检查是否是用户消息
+  if (!messages.value[index].isUser) return;
+
+  // 获取用户消息和对应的AI回复
+  const userMessage = messages.value[index];
+  
+  // 从集合中删除用户消息和紧接着的AI消息
+  messages.value.splice(index, 1);
+  // 删除AI回答（现在在index位置，因为用户消息已删除）
+  if (index < messages.value.length && !messages.value[index].isUser) {
+    messages.value.splice(index, 1);
+  }
+
+  // 尝试从后端删除对话记录
+  try {
+    const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
+    if (!userId) return;
+
+    // 根据问题内容查找对应的chat记录
+    const history = await chatApi.getChatHistory(userId, 1, 50);
+    if (history && history.chats) {
+      const chatToDelete = history.chats.find(chat => 
+        chat.question === userMessage.text
+      );
+      
+      if (chatToDelete) {
+        await chatApi.deleteChat(chatToDelete.id);
+        console.log('[AI助手] 对话已删除');
+        showNotification('对话已删除', 'success');
+      }
+    }
+  } catch (err) {
+    console.error('[AI助手] 删除对话失败:', err);
+    showNotification('删除失败', 'error');
+  }
+};
+
+const copyMessage = (text) => {
+  navigator.clipboard.writeText(text).then(() => {
+    console.log('[AI助手] 消息已复制到剪贴板');
+    showNotification('已复制到剪贴板', 'success');
+  }).catch(err => {
+    console.error('[AI助手] 复制失败:', err);
+    showNotification('复制失败', 'error');
+  });
+};
+
+const showNotification = (message, type = 'success') => {
+  // 创建通知元素
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 px-4 py-2 rounded-lg text-white text-sm z-[200] animate-fade-in ${
+    type === 'success' ? 'bg-green-500' : 'bg-red-500'
+  }`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+
+  // 3秒后移除
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
 };
 
 const scrollToBottom = () => {
@@ -422,12 +529,37 @@ watch(messages, () => {
   user-select: text;
 }
 
-.drag-handle {
-  user-select: none;
-  -webkit-user-select: none;
+/* 自定义滚动条样式 */
+.assistant-dialog ::-webkit-scrollbar {
+  width: 6px;
 }
 
-.drag-handle:active {
-  cursor: grabbing;
+.assistant-dialog ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.assistant-dialog ::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #00f0ff, #b000ff);
+  border-radius: 3px;
+}
+
+.assistant-dialog ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #00f0ff, #b000ff);
+  opacity: 0.8;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
 }
 </style>

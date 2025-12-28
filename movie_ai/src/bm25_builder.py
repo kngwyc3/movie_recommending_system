@@ -24,7 +24,6 @@ CHINESE_STOPWORDS = {
 
 # 停用词列表（英文）
 ENGLISH_STOPWORDS = {
-    'comedy', 'drama', 'action', 'thriller', 'horror', 'romance',
     'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to',
     'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be',
     'this', 'that', 'these', 'those', 'have', 'has', 'had', 'do',

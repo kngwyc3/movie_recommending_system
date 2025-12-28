@@ -11,10 +11,32 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.rag import rag_chain
 
 # 用户输入
-query = "莱士与格罗米特系列的开山之作，这部短片讲述他们意外踏上探索月球的旅程"
+query = "推荐动作片"
 
 # 获取检索和重排序详情
 details = rag_chain.get_retrieval_details(query)
+
+# ============== 打印检索和重排序结果 ==============
+print("\n" + "="*80)
+print("🔍 检索和重排序结果：")
+print("="*80 + "\n")
+if details:
+    # 打印第一个 BM25 检索结果
+    if details.get('bm25_retrieval') and len(details['bm25_retrieval']) > 0:
+        print("【第一个 BM25 检索结果】")
+        print(json.dumps(details['bm25_retrieval'][0], indent=2, ensure_ascii=False))
+    
+    # 打印第一个向量检索结果
+    if details.get('vector_retrieval') and len(details['vector_retrieval']) > 0:
+        print("\n【第一个向量检索结果】")
+        print(json.dumps(details['vector_retrieval'][0], indent=2, ensure_ascii=False))
+    
+    # 打印所有重排序结果
+    if details.get('reranked_results'):
+        print("\n【所有重排序结果】")
+        print(json.dumps(details['reranked_results'], indent=2, ensure_ascii=False))
+else:
+    print("❌ 无法获取检索详情")
 
 # ============== 执行 RAG 流式查询并实时输出 ==============
 print("\n" + "="*80)
@@ -34,7 +56,7 @@ if stream_response:
 
     # ============== 完整RAG JSON响应 ==============
     print("\n" + "="*80)
-    print("💾 完整JSON响应:")
+    print("💾 最终结果:")
     print("="*80 + "\n")
 
     # 使用新的API获取完整响应
