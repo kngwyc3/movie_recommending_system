@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 from flask import jsonify
-from config.app_config import ALLOWED_EXTENSIONS, get_upload_folder
+from src.config.app_config import ALLOWED_EXTENSIONS, get_upload_folder
 
 
 def allowed_file(filename):

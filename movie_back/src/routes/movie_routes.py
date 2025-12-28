@@ -2,8 +2,8 @@
 电影相关路由
 """
 from flask import request, jsonify
-from viewmodels.movie_viewmodel import movie_viewmodel
-from utils.helpers import (
+from src.viewmodels.movie_viewmodel import movie_viewmodel
+from src.utils.helpers import (
     success_response, error_response, bad_request_response,
     get_pagination_params
 )

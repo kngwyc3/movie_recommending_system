@@ -4,8 +4,8 @@ Auth ViewModel - 认证业务逻辑层
 import jwt
 import re
 from datetime import datetime, timedelta
-from repositories.user_repository import user_repository
-from models.user_model import UserModel
+from src.repositories.user_repository import user_repository
+from src.models.user_model import UserModel
 
 
 class AuthViewModel:

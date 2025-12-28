@@ -332,6 +332,7 @@ const fetchRelatedMovies = async () => {
     const list = response?.data ?? response ?? [];
     relatedMovies.value = (Array.isArray(list) ? list : [])
       .filter(m => m.id !== props.id)
+      .map(m => ({ ...m, image: resolvePoster(m.image, m.title, '200', '300') }));
       .map(m => ({ ...m, image: resolvePoster(m.image, m.title, { width: '200', height: '300', buildResourceUrl, getReliableImageUrl }) }));
   } catch (err) {
     console.error('获取相关电影失败:', err);
@@ -462,6 +463,11 @@ onMounted(async () => {
   await addToHistory();
   await checkFavorite();
 });
+
+function resolvePoster(path, title = '', width = '400', height = '600') {
+  // 优先已配置的真实海报
+  return resolvePoster(path, title, { width, height, buildResourceUrl, getReliableImageUrl });
+}
 </script>
 
 <style scoped>

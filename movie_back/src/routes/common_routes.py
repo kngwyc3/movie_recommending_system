@@ -2,7 +2,7 @@
 通用路由 - 健康检查、错误处理
 """
 from flask import jsonify
-from utils.helpers import not_found_response, error_response
+from src.utils.helpers import not_found_response, error_response
 
 
 def register_routes(app):

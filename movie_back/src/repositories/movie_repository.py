@@ -2,8 +2,8 @@
 Movie Repository - 电影数据访问层
 负责所有数据库操作
 """
-from config.database import db
-from models.movie_model import MovieModel
+from src.config.database import db
+from src.models.movie_model import MovieModel
 
 
 class MovieRepository:

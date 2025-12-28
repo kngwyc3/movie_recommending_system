@@ -68,46 +68,7 @@
       </div>
 
       <!-- 特色推荐 -->
-      <FeaturedBanner v-if="!loading && featuredMovie" :movie="featuredMovie" :recommended-movies="recommendedMovies" />
-
-      <!-- 热门电影瀑布流 -->
-      <section v-if="!loading" class="mb-12">
-        <h2 class="text-2xl font-bold text-white mb-6 font-orbitron flex items-center gap-3">
-          <span class="w-1 h-8 bg-gradient-to-b from-neon-blue to-neon-purple rounded"></span>
-          热门电影
-        </h2>
-        <!-- 横向滚动容器 -->
-        <div class="relative group">
-          <div class="flex gap-4 overflow-x-auto pb-4 scroll-smooth hide-scrollbar" ref="scrollContainer">
-            <div
-              v-for="movie in hotMovies"
-              :key="movie.id"
-              class="flex-shrink-0 w-[200px]"
-            >
-              <MovieCard :movie="movie" />
-            </div>
-          </div>
-          <!-- 左右导航按钮 -->
-          <button
-            v-if="showScrollButtons"
-            @click="scrollLeft"
-            class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 w-10 h-10 bg-gradient-to-r from-neon-blue to-neon-purple rounded-full flex items-center justify-center text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:scale-110"
-          >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-            </svg>
-          </button>
-          <button
-            v-if="showScrollButtons"
-            @click="scrollRight"
-            class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 w-10 h-10 bg-gradient-to-r from-neon-blue to-neon-purple rounded-full flex items-center justify-center text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:scale-110"
-          >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
-        </div>
-      </section>
+      <FeaturedBanner v-if="!loading" :movie="featuredMovie" />
 
       <!-- 加载状态 -->
       <div v-if="loading" class="text-center py-12">
@@ -133,7 +94,6 @@ import { ref, onMounted, computed } from 'vue';
 import FeaturedBanner from '../components/FeaturedBanner.vue';
 import MovieAssistant from '../components/MovieAssistant.vue';
 import UserMenu from '../components/UserMenu.vue';
-import MovieCard from '../components/MovieCard.vue';
 import { movieApi, buildResourceUrl, getReliableImageUrl } from '../api/movies';
 import { resolvePoster } from '../utils/poster';
 
@@ -162,21 +122,15 @@ const buttonStyle = computed(() => ({
 
 // 电影数据
 const featuredMovie = ref(null);
-const hotMovies = ref([]);
 const loading = ref(false);
 const error = ref(null);
-
-// 推荐电影（从热门电影中取3个）
-const recommendedMovies = computed(() => hotMovies.value.slice(0, 3));
-
-// 滚动容器引用
-const scrollContainer = ref(null);
-const showScrollButtons = computed(() => typeof window !== 'undefined' && window.innerWidth >= 768);
 
 // 获取特色推荐
 const fetchFeaturedMovie = async () => {
   try {
+    loading.value = true;
     const response = await movieApi.getFeaturedMovie();
+    // request 封装已在 success 且带 data 时返回 data 字段，这里直接使用响应
     const data = response || null;
     featuredMovie.value = data
       ? {
@@ -186,38 +140,13 @@ const fetchFeaturedMovie = async () => {
       : null;
 
     if (!featuredMovie.value) {
-      console.warn('暂无特色推荐数据');
+      error.value = '暂无特色推荐数据';
     }
   } catch (err) {
     console.error('获取特色推荐失败:', err);
     error.value = '加载特色推荐失败';
-  }
-};
-
-// 获取热门电影
-const fetchHotMovies = async () => {
-  try {
-    const response = await movieApi.getHotMovies(1, 20);
-    const data = Array.isArray(response) ? response : (response?.movies || []);
-    hotMovies.value = data.map(movie => ({
-      ...movie,
-      image: resolvePoster(movie.image, movie.title, { width: '400', height: '600', buildResourceUrl, getReliableImageUrl })
-    }));
-  } catch (err) {
-    console.error('获取热门电影失败:', err);
-  }
-};
-
-// 滚动控制
-const scrollLeft = () => {
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollBy({ left: -400, behavior: 'smooth' });
-  }
-};
-
-const scrollRight = () => {
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollBy({ left: 400, behavior: 'smooth' });
+  } finally {
+    loading.value = false;
   }
 };
 
@@ -303,15 +232,7 @@ const stopButtonDrag = () => {
 // 页面加载时获取数据
 onMounted(async () => {
   initializeButtonPosition();
-  loading.value = true;
-  try {
-    await Promise.all([
-      fetchFeaturedMovie(),
-      fetchHotMovies()
-    ]);
-  } finally {
-    loading.value = false;
-  }
+  await fetchFeaturedMovie();
 });
 </script>
 
@@ -333,29 +254,5 @@ onMounted(async () => {
 .assistant-button svg {
   /* 确保图标不响应拖拽事件 */
   pointer-events: none;
-}
-
-/* 隐藏滚动条但保留滚动功能 */
-.hide-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 240, 255, 0.3) transparent;
-}
-
-.hide-scrollbar::-webkit-scrollbar {
-  height: 6px;
-}
-
-.hide-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 3px;
-}
-
-.hide-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 240, 255, 0.3);
-  border-radius: 3px;
-}
-
-.hide-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 240, 255, 0.5);
 }
 </style>

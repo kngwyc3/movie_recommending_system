@@ -1,9 +1,9 @@
 """
-User ViewModel - 用户业务逻辑层,返回经过model处理后的用户信息
+User ViewModel - 用户业务逻辑层
 """
-from repositories.user_repository import user_repository
-from repositories.movie_repository import movie_repository
-from models.user_model import UserModel
+from src.repositories.user_repository import user_repository
+from src.repositories.movie_repository import movie_repository
+from src.models.user_model import UserModel
 
 
 class UserViewModel:

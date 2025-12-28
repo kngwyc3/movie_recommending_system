@@ -30,7 +30,7 @@ class Config:
     # ChromaDB配置 (复用movie_back)
     # 使用持久化模式，共享movie_back的chroma_db目录
     CHROMA_DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'movie_back', 'chroma_db')
-    CHROMA_COLLECTION_NAME = 'movie_ai_collection'  # RAG专用的collection
+    CHROMA_COLLECTION_NAME = 'movies'  # 使用movies集合
     
     # RAG配置
     TOP_K = 5  # 检索Top-K相关文档（向量和BM25各检索TOP_K条）

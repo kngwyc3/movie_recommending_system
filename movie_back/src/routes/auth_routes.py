@@ -2,8 +2,8 @@
 认证相关路由
 """
 from flask import request, jsonify
-from viewmodels.auth_viewmodel import auth_viewmodel
-from utils.helpers import success_response, error_response, bad_request_response
+from src.viewmodels.auth_viewmodel import auth_viewmodel
+from src.utils.helpers import success_response, error_response, bad_request_response
 
 
 def register_routes(app):

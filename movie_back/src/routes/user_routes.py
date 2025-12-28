@@ -4,8 +4,8 @@
 import os
 import traceback
 from flask import request, jsonify
-from viewmodels.user_viewmodel import user_viewmodel
-from utils.helpers import (
+from src.viewmodels.user_viewmodel import user_viewmodel
+from src.utils.helpers import (
     success_response, error_response, bad_request_response,
     allowed_file, generate_avatar_filename, get_upload_folder
 )

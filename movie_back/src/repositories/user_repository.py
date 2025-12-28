@@ -2,8 +2,8 @@
 User Repository - 用户数据访问层
 负责所有用户数据库操作
 """
-from config.database import db
-from models.user_model import UserModel
+from src.config.database import db
+from src.models.user_model import UserModel
 import chromadb
 
 

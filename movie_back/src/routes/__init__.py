@@ -1,11 +1,7 @@
 """
 路由模块初始化
 """
-from routes.movie_routes import register_routes as register_movie_routes
-from routes.auth_routes import register_routes as register_auth_routes
-from routes.user_routes import register_routes as register_user_routes
-from routes.file_routes import register_routes as register_file_routes
-from routes.common_routes import register_routes as register_common_routes
+# 这些导入延迟进行，避免模块初始化时的循环依赖问题
 
 __all__ = [
     'register_movie_routes',
@@ -13,4 +9,5 @@ __all__ = [
     'register_user_routes',
     'register_file_routes',
     'register_common_routes',
+    'register_ai_routes',
 ]

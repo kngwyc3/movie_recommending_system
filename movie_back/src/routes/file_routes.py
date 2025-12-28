@@ -2,7 +2,7 @@
 文件服务路由
 """
 from flask import send_from_directory, jsonify
-from utils.helpers import not_found_response, bad_request_response
+from src.utils.helpers import not_found_response, bad_request_response
 
 
 def register_routes(app):

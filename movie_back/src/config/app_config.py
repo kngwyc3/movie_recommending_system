@@ -5,6 +5,23 @@ from flask import Flask
 from flask_cors import CORS
 from datetime import timedelta
 import os
+import sys
+
+# ==================== movie_ai 路径配置 ====================
+# 添加 movie_ai 到 Python 路径，以便导入其模块
+# 因为 movie_ai/src 中的文件使用 from src.xxx import 的导入方式
+# 从 movie_back/src/config/app_config.py
+# 向上三级：config -> src -> movie_back -> vue，然后进入 movie_ai
+current_dir = os.path.dirname(os.path.abspath(__file__))
+movie_ai_path = os.path.abspath(os.path.join(current_dir, '../../../movie_ai'))
+movie_ai_src_path = os.path.join(movie_ai_path, 'src')
+
+if movie_ai_path not in sys.path:
+    sys.path.insert(0, movie_ai_path)
+
+# 定义 movie_ai 相关路径常量
+MOVIE_AI_PATH = movie_ai_path
+MOVIE_AI_SRC_PATH = movie_ai_src_path
 
 # 应用实例
 app = Flask(__name__)
