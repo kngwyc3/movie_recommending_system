@@ -433,6 +433,258 @@ def rerank_documents():
         }), 500
 
 
+# ============================================================================
+# 动态推荐系统路由
+# ============================================================================
+
+# 延迟导入推荐系统（避免循环依赖）
+_recommendation_service = None
+
+
+def get_recommendation_service():
+    """获取推荐服务实例（懒加载）"""
+    global _recommendation_service
+    if _recommendation_service is None:
+        try:
+            from src.recommendation.lightgcn import LightGCNRecommender
+            # 创建推荐器实例（启用行为追踪）
+            _recommendation_service = LightGCNRecommender(
+                embed_dim=64,
+                num_layers=3,
+                model_dir=os.path.join(os.path.dirname(__file__), 'data'),
+                use_behavior_tracking=True,
+                decay_days=30
+            )
+            # 尝试加载预训练嵌入
+            loaded = _recommendation_service.load_embeddings()
+            if loaded:
+                print("✓ 推荐系统初始化成功（已加载预训练嵌入）")
+            else:
+                print("⚠ 推荐系统初始化成功，但未找到预训练嵌入文件")
+        except Exception as e:
+            print(f"✗ 推荐系统初始化失败: {str(e)}")
+            _recommendation_service = None
+    return _recommendation_service
+
+
+@app.route('/ai/recommendation/personalized', methods=['GET'])
+def get_personalized_recommendations():
+    """
+    获取个性化推荐
+
+    参数:
+        user_id: 用户ID (必需)
+        top_k: 返回推荐数量 (默认 10)
+        use_dynamic: 是否使用动态推荐 (默认 true)
+
+    返回:
+        推荐电影列表 [(movie_id, score), ...]
+    """
+    try:
+        recommender = get_recommendation_service()
+        if recommender is None:
+            return jsonify({
+                'success': False,
+                'message': '推荐系统未初始化'
+            }), 500
+
+        # 获取参数
+        user_id = request.args.get('user_id', type=int)
+        top_k = request.args.get('top_k', 10, type=int)
+        use_dynamic = request.args.get('use_dynamic', True, type=bool)
+
+        # 参数校验
+        if user_id is None:
+            return jsonify({
+                'success': False,
+                'message': 'user_id 参数不能为空'
+            }), 400
+
+        if top_k < 1 or top_k > 50:
+            return jsonify({
+                'success': False,
+                'message': 'top_k 必须在 1-50 之间'
+            }), 400
+
+        # 获取用户历史（模拟，实际应从数据库获取）
+        user_history = []  # TODO: 从数据库获取用户历史
+
+        # 获取推荐
+        recommendations = recommender.recommend(
+            user_history=user_history,
+            top_k=top_k,
+            exclude_seen=True,
+            user_id=user_id,
+            use_dynamic=use_dynamic
+        )
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'user_id': user_id,
+                'top_k': top_k,
+                'use_dynamic': use_dynamic,
+                'recommendations': [
+                    {'movie_id': mid, 'score': float(score)}
+                    for mid, score in recommendations
+                ]
+            }
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'获取个性化推荐失败: {str(e)}'
+        }), 500
+
+
+@app.route('/ai/recommendation/behavior', methods=['POST'])
+def record_user_behavior():
+    """
+    记录用户行为
+
+    请求体:
+    {
+        "user_id": 1,           # 用户ID (必需)
+        "movie_id": 10,         # 电影ID (必需)
+        "behavior_type": "click", # 行为类型 (必需)
+        "metadata": {           # 额外元数据 (可选)
+            "rating": 5,
+            "watch_duration": 3600
+        }
+    }
+
+    行为类型:
+        - click: 点击/浏览
+        - view: 观看
+        - favorite: 收藏
+        - like: 喜欢
+        - watch: 完整观看
+        - rate: 评分 (需要在 metadata 中提供 rating 值，0-10分制)
+            - 8-10分: rate_high (权重0.7)
+            - 5-7分: rate_medium (权重0.5)
+            - 1-4分: rate_low (权重0.3)
+        - share: 分享
+        - comment: 评论
+
+    返回:
+        记录结果
+    """
+    try:
+        recommender = get_recommendation_service()
+        if recommender is None:
+            return jsonify({
+                'success': False,
+                'message': '推荐系统未初始化'
+            }), 500
+
+        data = request.get_json()
+
+        # 参数校验
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': '请提供请求参数'
+            }), 400
+
+        user_id = data.get('user_id')
+        movie_id = data.get('movie_id')
+        behavior_type = data.get('behavior_type')
+        metadata = data.get('metadata', {})
+
+        if user_id is None:
+            return jsonify({
+                'success': False,
+                'message': 'user_id 不能为空'
+            }), 400
+
+        if movie_id is None:
+            return jsonify({
+                'success': False,
+                'message': 'movie_id 不能为空'
+            }), 400
+
+        if not behavior_type:
+            return jsonify({
+                'success': False,
+                'message': 'behavior_type 不能为空'
+            }), 400
+
+        # 记录行为
+        success = recommender.record_user_behavior(
+            user_id=user_id,
+            movie_id=movie_id,
+            behavior_type=behavior_type,
+            metadata=metadata
+        )
+
+        if success:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'user_id': user_id,
+                    'movie_id': movie_id,
+                    'behavior_type': behavior_type
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': '用户行为记录失败'
+            }), 500
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'记录用户行为失败: {str(e)}'
+        }), 500
+
+
+@app.route('/ai/recommendation/statistics', methods=['GET'])
+def get_recommendation_statistics():
+    """
+    获取推荐系统统计信息
+
+    返回:
+        统计信息 (用户数、行为数、行为分布等)
+    """
+    try:
+        recommender = get_recommendation_service()
+        if recommender is None:
+            return jsonify({
+                'success': False,
+                'message': '推荐系统未初始化'
+            }), 500
+
+        stats = {}
+        if recommender.behavior_tracker:
+            stats = recommender.behavior_tracker.get_statistics()
+            stats['status'] = 'running'
+            stats['behavior_tracking'] = True
+        else:
+            stats = {
+                'status': 'initialized',
+                'behavior_tracking': False
+            }
+
+        return jsonify({
+            'success': True,
+            'data': stats
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'获取统计信息失败: {str(e)}'
+        }), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """404 错误处理"""
@@ -469,13 +721,19 @@ if __name__ == '__main__':
     print(f"🚀 {Config.FLASK_APP_NAME} 启动中...")
     print(f"{'='*60}")
     print(f"📍 地址: http://{Config.FLASK_HOST}:{Config.FLASK_PORT}")
-    print(f"🏥 健康检查: http://localhost:{Config.FLASK_PORT}/ai/health")
-    print(f"🎬 电影推荐: POST http://localhost:{Config.FLASK_PORT}/ai/recommend")
-    print(f"🌊 流式推荐: POST http://localhost:{Config.FLASK_PORT}/ai/recommend/stream")
-    print(f"🔍 向量检索: POST http://localhost:{Config.FLASK_PORT}/ai/search/vector")
-    print(f"📝 BM25检索: POST http://localhost:{Config.FLASK_PORT}/ai/search/bm25")
-    print(f"🔀 混合检索: POST http://localhost:{Config.FLASK_PORT}/ai/search/hybrid")
-    print(f"🎯 重排序: POST http://localhost:{Config.FLASK_PORT}/ai/rerank")
+    print(f"\n📡 RAG 推荐:")
+    print(f"  🏥 健康检查: http://localhost:{Config.FLASK_PORT}/ai/health")
+    print(f"  🎬 电影推荐: POST http://localhost:{Config.FLASK_PORT}/ai/recommend")
+    print(f"  🌊 流式推荐: POST http://localhost:{Config.FLASK_PORT}/ai/recommend/stream")
+    print(f"\n🔍 检索:")
+    print(f"  📊 向量检索: POST http://localhost:{Config.FLASK_PORT}/ai/search/vector")
+    print(f"  📝 BM25检索: POST http://localhost:{Config.FLASK_PORT}/ai/search/bm25")
+    print(f"  🔀 混合检索: POST http://localhost:{Config.FLASK_PORT}/ai/search/hybrid")
+    print(f"  🎯 重排序: POST http://localhost:{Config.FLASK_PORT}/ai/rerank")
+    print(f"\n🎯 动态推荐系统:")
+    print(f"  👤 个性化推荐: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/personalized")
+    print(f"  📝 记录行为: POST http://localhost:{Config.FLASK_PORT}/ai/recommendation/behavior")
+    print(f"  📊 统计信息: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/statistics")
     print(f"{'='*60}\n")
     
     app.run(

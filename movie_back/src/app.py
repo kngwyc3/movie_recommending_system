@@ -24,6 +24,7 @@ def register_all_routes():
     from src.routes.common_routes import register_routes as register_common_routes
     from src.routes.ai_routes import register_routes as register_ai_routes
     from src.routes.chat_routes import register_routes as register_chat_routes
+    from src.routes.recommendation_routes import register_routes as register_recommendation_routes
 
     # 注册所有路由
     register_movie_routes(app)
@@ -33,6 +34,7 @@ def register_all_routes():
     register_common_routes(app)
     register_ai_routes(app)
     register_chat_routes(app)
+    register_recommendation_routes(app)
 
 
 if __name__ == '__main__':

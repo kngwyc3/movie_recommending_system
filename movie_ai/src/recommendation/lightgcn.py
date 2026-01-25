@@ -1,6 +1,7 @@
 """
 LightGCN 推荐器实现
 使用 PyTorch Geometric 的 LGConv 层实现 LightGCN
+集成用户行为追踪，支持动态推荐
 """
 import os
 import numpy as np
@@ -10,6 +11,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import LGConv
 from torch_geometric.data import Data
 from sklearn.metrics.pairwise import cosine_similarity
+from user_behavior import UserBehaviorTracker
 
 
 class LightGCN(nn.Module):
@@ -81,8 +83,10 @@ class LightGCNRecommender:
     """
     LightGCN 推荐器包装类
     负责训练、保存模型、提供推荐服务
+    集成用户行为追踪，支持动态推荐
     """
-    def __init__(self, embed_dim=64, num_layers=3, model_dir='d:/code/vue/movie_ai/data'):
+    def __init__(self, embed_dim=64, num_layers=3, model_dir='d:/code/vue/movie_ai/data',
+                 use_behavior_tracking=True, decay_days=30):
         self.embed_dim = embed_dim
         self.num_layers = num_layers
         self.model_dir = model_dir
@@ -90,6 +94,11 @@ class LightGCNRecommender:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.item_embeddings = None
         self.user_embeddings = None
+        
+        # 用户行为追踪
+        self.use_behavior_tracking = use_behavior_tracking
+        self.behavior_tracker = None
+        self.decay_days = decay_days
         
         # 创建模型目录
         os.makedirs(model_dir, exist_ok=True)
@@ -283,6 +292,75 @@ class LightGCNRecommender:
             
             print(f"用户嵌入已保存: {user_emb_path}")
             print(f"物品嵌入已保存: {item_emb_path}")
+            
+            # 初始化行为追踪器
+            if self.use_behavior_tracking:
+                self._init_behavior_tracker()
+    
+    def _init_behavior_tracker(self):
+        """
+        初始化用户行为追踪器
+        使用电影嵌入作为基础
+        """
+        if self.item_embeddings is None:
+            print("警告: 物品嵌入未加载，无法初始化行为追踪器")
+            return
+        
+        # 构建电影ID到向量的映射
+        movie_embeddings = {i: self.item_embeddings[i] for i in range(len(self.item_embeddings))}
+        
+        # 创建行为追踪器
+        # 使用与前端匹配的0-10分制评分权重，映射到三个等级
+        self.behavior_tracker = UserBehaviorTracker(
+            decay_days=self.decay_days,
+            behavior_weights={
+                'like': 1.0,             # 👍 喜欢 - 最高权重
+                'favorite': 0.8,         # ⭐ 收藏
+                'rate_high': 0.7,        # 高评分 (8-10分)
+                'rate_medium': 0.5,      # 中评分 (5-7分)
+                'rate_low': 0.3,         # 低评分 (1-4分)
+                'click': 0.3,            # 👆 点击 - 最低权重
+                'view': 0.3,             # 观看
+                'watch': 0.6,            # 完整观看
+                'share': 0.6,            # 📤 分享
+                'comment': 0.5,          # 💬 评论
+            }
+        )
+        self.behavior_tracker.set_movie_embeddings(movie_embeddings)
+        
+        print(f"✓ 行为追踪器已初始化 (衰减天数: {self.decay_days})")
+    
+    def record_user_behavior(self, user_id, movie_id, behavior_type, metadata=None):
+        """
+        记录用户行为
+        
+        参数:
+            user_id: 用户ID (int)
+            movie_id: 电影ID (int, 0-based)
+            behavior_type: 行为类型 (str)
+                - click: 点击/浏览
+                - view: 观看
+                - favorite: 收藏/喜欢
+                - watch: 完整观看
+                - rate: 评分 (需在 metadata 中提供 rating 值)
+                - share: 分享
+            metadata: 额外元数据 (dict)
+                - rating: 评分值 (1-5)
+                - watch_duration: 观看时长
+                等
+        
+        返回:
+            bool: 是否记录成功
+        """
+        if not self.use_behavior_tracking:
+            print("警告: 行为追踪未启用")
+            return False
+        
+        if self.behavior_tracker is None:
+            print("警告: 行为追踪器未初始化")
+            return False
+        
+        return self.behavior_tracker.record_behavior(user_id, movie_id, behavior_type, metadata)
     
     def load_embeddings(self):
         """
@@ -300,17 +378,27 @@ class LightGCNRecommender:
             print("未找到预训练嵌入文件，需要先训练模型")
             return False
     
-    def recommend(self, user_history, top_k=10, exclude_seen=True):
+    def recommend(self, user_history, top_k=10, exclude_seen=True, user_id=None, use_dynamic=False):
         """
-        基于用户历史推荐电影（使用物品协同过滤）
+        基于用户历史推荐电影
         
         参数:
             user_history: 用户历史观看的电影 ID 列表（0-based）
             top_k: 返回 top-k 推荐
             exclude_seen: 是否排除已看过的电影
+            user_id: 用户ID (用于动态推荐)
+            use_dynamic: 是否使用动态用户向量推荐
+        
+        返回:
+            List[Tuple[int, float]]: [(movie_id, score), ...]
         """
         if self.item_embeddings is None:
             raise ValueError("需要先训练模型或加载嵌入")
+        
+        # 尝试使用动态推荐
+        if use_dynamic and user_id is not None and self.use_behavior_tracking:
+            if self.behavior_tracker is not None:
+                return self._recommend_dynamic(user_id, top_k, exclude_seen, user_history)
         
         # 如果用户没有历史记录，返回热门电影
         if not user_history:
@@ -327,6 +415,59 @@ class LightGCNRecommender:
             for mid in user_history:
                 if mid < len(similarities):
                     similarities[mid] = -1
+        
+        # 获取 top-k
+        top_indices = np.argsort(similarities)[::-1][:top_k]
+        top_scores = similarities[top_indices]
+        
+        return list(zip(top_indices.tolist(), top_scores.tolist()))
+    
+    def _recommend_dynamic(self, user_id, top_k=10, exclude_seen=True, user_history=None):
+        """
+        基于动态用户向量推荐电影（推荐给有行为记录的用户）
+        
+        参数:
+            user_id: 用户ID
+            top_k: 返回 top-k 推荐
+            exclude_seen: 是否排除已看过的电影
+            user_history: 用户历史（用于排除）
+        
+        返回:
+            List[Tuple[int, float]]: [(movie_id, score), ...]
+        """
+        if self.item_embeddings is None:
+            raise ValueError("需要先训练模型或加载嵌入")
+        
+        if self.behavior_tracker is None:
+            raise ValueError("行为追踪器未初始化")
+        
+        # 计算动态用户向量
+        user_emb = self.behavior_tracker.compute_user_vector(user_id)
+        
+        if user_emb is None:
+            # 如果没有足够的行为数据，回退到静态推荐
+            print(f"用户 {user_id} 行为数据不足，使用静态推荐")
+            if user_history:
+                return self.recommend(user_history, top_k, exclude_seen)
+            else:
+                return self._get_popular_movies(top_k)
+        
+        # 计算所有电影的相似度
+        similarities = cosine_similarity([user_emb], self.item_embeddings)[0]
+        
+        # 排除已看过的电影
+        if exclude_seen:
+            # 排除历史记录中的电影
+            if user_history:
+                for mid in user_history:
+                    if mid < len(similarities):
+                        similarities[mid] = -1
+            
+            # 排除行为记录中的电影
+            if user_id in self.behavior_tracker.user_behaviors:
+                for movie_id in self.behavior_tracker.user_behaviors[user_id].keys():
+                    if movie_id < len(similarities):
+                        similarities[movie_id] = -1
         
         # 获取 top-k
         top_indices = np.argsort(similarities)[::-1][:top_k]
