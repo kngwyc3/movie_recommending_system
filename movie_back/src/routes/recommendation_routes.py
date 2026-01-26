@@ -128,85 +128,22 @@ def register_routes(app):
     @app.route('/api/recommendation/behavior/batch', methods=['POST'])
     def record_user_behaviors():
         """
-        批量记录用户行为
-        
-        请求体:
-            {
-                "behaviors": [
-                    {
-                        "user_id": 1,
-                        "movie_id": 10,
-                        "behavior_type": "click",
-                        "metadata": {}
-                    },
-                    ...
-                ]
-            }
-        
-        返回:
-            记录结果统计
+        批量记录用户行为（未实现 - movie_ai 服务暂不支持批量接口）
+
+        TODO: 需要在 movie_ai 服务中实现批量行为记录接口
         """
-        try:
-            data = request.get_json()
-            
-            # 参数校验
-            if not data or 'behaviors' not in data:
-                return bad_request_response('请提供 behaviors 数组')
-            
-            behaviors = data['behaviors']
-            
-            if not isinstance(behaviors, list) or len(behaviors) == 0:
-                return bad_request_response('behaviors 必须是非空数组')
-            
-            # 批量记录行为
-            success_count = 0
-            failed_count = 0
-            
-            for behavior in behaviors:
-                try:
-                    user_id = behavior.get('user_id')
-                    movie_id = behavior.get('movie_id')
-                    behavior_type = behavior.get('behavior_type')
-                    metadata = behavior.get('metadata', {})
-                    
-                    if user_id is None or movie_id is None or not behavior_type:
-                        failed_count += 1
-                        continue
-                    
-                    success = recommendation_viewmodel.record_user_behavior(
-                        user_id=user_id,
-                        movie_id=movie_id,
-                        behavior_type=behavior_type,
-                        metadata=metadata
-                    )
-                    
-                    if success:
-                        success_count += 1
-                    else:
-                        failed_count += 1
-                        
-                except Exception:
-                    failed_count += 1
-            
-            return success_response({
-                'total': len(behaviors),
-                'success_count': success_count,
-                'failed_count': failed_count
-            }, message=f'批量记录完成: 成功 {success_count}, 失败 {failed_count}')
-            
-        except Exception as e:
-            return error_response(f'批量记录用户行为失败: {str(e)}')
+        return error_response('批量记录用户行为功能暂未实现')
 
     @app.route('/api/recommendation/user/history', methods=['GET'])
     def get_user_behavior_history():
         """
         获取用户行为历史
-        
+
         参数:
             user_id: 用户ID (必需)
             limit: 返回数量限制 (默认 50)
             behavior_type: 筛选特定行为类型 (可选)
-        
+
         返回:
             行为历史列表
         """
@@ -215,21 +152,21 @@ def register_routes(app):
             user_id = request.args.get('user_id', type=int)
             limit = request.args.get('limit', 50, type=int)
             behavior_type = request.args.get('behavior_type', type=str)
-            
+
             # 参数校验
             if user_id is None:
                 return bad_request_response('user_id 参数不能为空')
-            
+
             if limit < 1 or limit > 200:
                 return bad_request_response('limit 必须在 1-200 之间')
-            
+
             # 获取行为历史
             history = recommendation_viewmodel.get_user_behavior_history(
                 user_id=user_id,
                 limit=limit,
                 behavior_type=behavior_type
             )
-            
+
             return success_response({
                 'user_id': user_id,
                 'limit': limit,
@@ -237,7 +174,7 @@ def register_routes(app):
                 'history': history,
                 'total': len(history)
             }, message='获取行为历史成功')
-            
+
         except Exception as e:
             return error_response(f'获取行为历史失败: {str(e)}')
 
@@ -245,34 +182,34 @@ def register_routes(app):
     def get_similar_movies(movie_id):
         """
         查找相似电影
-        
+
         参数:
             movie_id: 电影ID (必需)
             top_k: 返回数量 (默认 10)
-        
+
         返回:
             相似电影列表
         """
         try:
             # 获取参数
             top_k = request.args.get('top_k', 10, type=int)
-            
+
             # 参数校验
             if top_k < 1 or top_k > 50:
                 return bad_request_response('top_k 必须在 1-50 之间')
-            
+
             # 获取相似电影
             similar_movies = recommendation_viewmodel.get_similar_movies(
                 movie_id=movie_id,
                 top_k=top_k
             )
-            
+
             return success_response({
                 'movie_id': movie_id,
                 'top_k': top_k,
                 'similar_movies': similar_movies
             }, message='获取相似电影成功')
-            
+
         except Exception as e:
             return error_response(f'获取相似电影失败: {str(e)}')
 
@@ -296,28 +233,28 @@ def register_routes(app):
     def get_hot_movies():
         """
         获取热门电影推荐（用于新用户冷启动）
-        
+
         参数:
             top_k: 返回数量 (默认 10)
-        
+
         返回:
             热门电影列表
         """
         try:
             # 获取参数
             top_k = request.args.get('top_k', 10, type=int)
-            
+
             # 参数校验
             if top_k < 1 or top_k > 50:
                 return bad_request_response('top_k 必须在 1-50 之间')
-            
+
             # 获取热门电影
             hot_movies = recommendation_viewmodel.get_hot_movies(top_k=top_k)
-            
+
             return success_response({
                 'top_k': top_k,
                 'hot_movies': hot_movies
             }, message='获取热门电影成功')
-            
+
         except Exception as e:
             return error_response(f'获取热门电影失败: {str(e)}')

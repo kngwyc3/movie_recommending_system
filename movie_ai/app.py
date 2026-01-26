@@ -506,8 +506,15 @@ def get_personalized_recommendations():
                 'message': 'top_k 必须在 1-50 之间'
             }), 400
 
-        # 获取用户历史（模拟，实际应从数据库获取）
-        user_history = []  # TODO: 从数据库获取用户历史
+        # 从行为追踪器获取用户历史
+        user_history = []
+        if recommender.behavior_tracker and user_id is not None:
+            behavior_history = recommender.behavior_tracker.get_user_behavior_history(
+                user_id=user_id,
+                limit=100
+            )
+            # 提取 movie_id 列表（去重）
+            user_history = list({h['movie_id'] for h in behavior_history})
 
         # 获取推荐
         recommendations = recommender.recommend(
@@ -685,6 +692,185 @@ def get_recommendation_statistics():
         }), 500
 
 
+@app.route('/ai/recommendation/similar-movies/<int:movie_id>', methods=['GET'])
+def get_similar_movies():
+    """
+    查找相似电影
+
+    参数:
+        movie_id: 电影ID (必需)
+        top_k: 返回数量 (默认 10)
+
+    返回:
+        相似电影列表 [(movie_id, score), ...]
+    """
+    try:
+        recommender = get_recommendation_service()
+        if recommender is None:
+            return jsonify({
+                'success': False,
+                'message': '推荐系统未初始化'
+            }), 500
+
+        # 获取参数
+        movie_id = request.view_args['movie_id']
+        top_k = request.args.get('top_k', 10, type=int)
+
+        # 参数校验
+        if top_k < 1 or top_k > 50:
+            return jsonify({
+                'success': False,
+                'message': 'top_k 必须在 1-50 之间'
+            }), 400
+
+        # 获取相似电影
+        similar_movies = recommender.find_similar_movies(movie_id, top_k)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'movie_id': movie_id,
+                'top_k': top_k,
+                'similar_movies': [
+                    {'movie_id': mid, 'score': float(score)}
+                    for mid, score in similar_movies
+                ]
+            }
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'获取相似电影失败: {str(e)}'
+        }), 500
+
+
+@app.route('/ai/recommendation/hot', methods=['GET'])
+def get_hot_movies():
+    """
+    获取热门电影推荐（用于新用户冷启动）
+
+    参数:
+        top_k: 返回数量 (默认 10)
+
+    返回:
+        热门电影列表 [(movie_id, score), ...]
+    """
+    try:
+        recommender = get_recommendation_service()
+        if recommender is None:
+            return jsonify({
+                'success': False,
+                'message': '推荐系统未初始化'
+            }), 500
+
+        # 获取参数
+        top_k = request.args.get('top_k', 10, type=int)
+
+        # 参数校验
+        if top_k < 1 or top_k > 50:
+            return jsonify({
+                'success': False,
+                'message': 'top_k 必须在 1-50 之间'
+            }), 400
+
+        # 获取热门电影
+        hot_movies = recommender._get_popular_movies(top_k)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'top_k': top_k,
+                'hot_movies': [
+                    {'movie_id': mid, 'score': float(score)}
+                    for mid, score in hot_movies
+                ]
+            }
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'获取热门电影失败: {str(e)}'
+        }), 500
+
+
+@app.route('/ai/recommendation/user/history', methods=['GET'])
+def get_user_behavior_history():
+    """
+    获取用户行为历史
+
+    参数:
+        user_id: 用户ID (必需)
+        limit: 返回数量限制 (默认 50)
+        behavior_type: 筛选特定行为类型 (可选)
+
+    返回:
+        行为历史列表
+    """
+    try:
+        recommender = get_recommendation_service()
+        if recommender is None:
+            return jsonify({
+                'success': False,
+                'message': '推荐系统未初始化'
+            }), 500
+
+        if recommender.behavior_tracker is None:
+            return jsonify({
+                'success': False,
+                'message': '行为追踪未启用'
+            }), 400
+
+        # 获取参数
+        user_id = request.args.get('user_id', type=int)
+        limit = request.args.get('limit', 50, type=int)
+        behavior_type = request.args.get('behavior_type', type=str)
+
+        # 参数校验
+        if user_id is None:
+            return jsonify({
+                'success': False,
+                'message': 'user_id 参数不能为空'
+            }), 400
+
+        if limit < 1 or limit > 200:
+            return jsonify({
+                'success': False,
+                'message': 'limit 必须在 1-200 之间'
+            }), 400
+
+        # 获取行为历史
+        history = recommender.behavior_tracker.get_user_history(
+            user_id=user_id,
+            limit=limit,
+            behavior_type=behavior_type
+        )
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'user_id': user_id,
+                'limit': limit,
+                'behavior_type': behavior_type,
+                'history': history,
+                'total': len(history)
+            }
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'获取行为历史失败: {str(e)}'
+        }), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """404 错误处理"""
@@ -734,6 +920,9 @@ if __name__ == '__main__':
     print(f"  👤 个性化推荐: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/personalized")
     print(f"  📝 记录行为: POST http://localhost:{Config.FLASK_PORT}/ai/recommendation/behavior")
     print(f"  📊 统计信息: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/statistics")
+    print(f"  🔍 相似电影: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/similar-movies/<movie_id>")
+    print(f"  🔥 热门电影: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/hot")
+    print(f"  📜 行为历史: GET http://localhost:{Config.FLASK_PORT}/ai/recommendation/user/history")
     print(f"{'='*60}\n")
     
     app.run(

@@ -93,7 +93,7 @@ class RecommendationViewModel:
         behavior_type: str = None
     ) -> List[Dict[str, Any]]:
         """
-        获取用户行为历史（TODO: 需要在 movie_ai 服务中实现相应接口）
+        获取用户行为历史
 
         Args:
             user_id: 用户ID
@@ -103,13 +103,20 @@ class RecommendationViewModel:
         Returns:
             行为历史列表
         """
-        # TODO: 需要在 movie_ai 服务中实现获取用户行为历史的接口
-        print(f"⚠️  get_user_behavior_history 功能待实现: user_id={user_id}")
-        return []
+        try:
+            return self.recommendation_service.get_user_behavior_history(
+                user_id=user_id,
+                limit=limit,
+                behavior_type=behavior_type
+            )
+
+        except Exception as e:
+            print(f"⚠️  获取用户行为历史失败: {e}")
+            raise RuntimeError(f"获取用户行为历史失败: {str(e)}")
 
     def get_similar_movies(self, movie_id: int, top_k: int = 10) -> List[Dict[str, Any]]:
         """
-        查找相似电影（TODO: 需要在 movie_ai 服务中实现相应接口）
+        查找相似电影
 
         Args:
             movie_id: 电影ID
@@ -118,14 +125,19 @@ class RecommendationViewModel:
         Returns:
             相似电影列表
         """
-        # TODO: 需要在 movie_ai 服务中实现相似电影推荐的接口
-        print(f"⚠️  get_similar_movies 功能待实现: movie_id={movie_id}")
-        return []
+        try:
+            return self.recommendation_service.get_similar_movies(
+                movie_id=movie_id,
+                top_k=top_k
+            )
+
+        except Exception as e:
+            print(f"⚠️  获取相似电影失败: {e}")
+            raise RuntimeError(f"获取相似电影失败: {str(e)}")
 
     def get_hot_movies(self, top_k: int = 10) -> List[Dict[str, Any]]:
         """
         获取热门电影推荐（用于新用户冷启动）
-        （TODO: 需要在 movie_ai 服务中实现相应接口）
 
         Args:
             top_k: 返回数量 (默认 10)
@@ -133,9 +145,12 @@ class RecommendationViewModel:
         Returns:
             热门电影列表
         """
-        # TODO: 需要在 movie_ai 服务中实现热门电影推荐的接口
-        print(f"⚠️  get_hot_movies 功能待实现: top_k={top_k}")
-        return []
+        try:
+            return self.recommendation_service.get_hot_movies(top_k=top_k)
+
+        except Exception as e:
+            print(f"⚠️  获取热门电影失败: {e}")
+            raise RuntimeError(f"获取热门电影失败: {str(e)}")
 
     def rate_movie(
         self,

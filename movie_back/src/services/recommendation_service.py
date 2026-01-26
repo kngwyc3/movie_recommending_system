@@ -146,6 +146,99 @@ class RecommendationService:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"调用统计信息服务失败: {str(e)}")
 
+    def get_similar_movies(self, movie_id: int, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        查找相似电影
+
+        Args:
+            movie_id: 电影ID
+            top_k: 返回数量 (默认 10)
+
+        Returns:
+            相似电影列表
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/ai/recommendation/similar-movies/{movie_id}",
+                params={'top_k': top_k},
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if not result.get('success'):
+                raise RuntimeError(result.get('message', '获取相似电影失败'))
+
+            return result['data']['similar_movies']
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"调用相似电影服务失败: {str(e)}")
+
+    def get_hot_movies(self, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        获取热门电影推荐（用于新用户冷启动）
+
+        Args:
+            top_k: 返回数量 (默认 10)
+
+        Returns:
+            热门电影列表
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/ai/recommendation/hot",
+                params={'top_k': top_k},
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if not result.get('success'):
+                raise RuntimeError(result.get('message', '获取热门电影失败'))
+
+            return result['data']['hot_movies']
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"调用热门电影服务失败: {str(e)}")
+
+    def get_user_behavior_history(
+        self,
+        user_id: int,
+        limit: int = 50,
+        behavior_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        获取用户行为历史
+
+        Args:
+            user_id: 用户ID
+            limit: 返回数量限制 (默认 50)
+            behavior_type: 筛选特定行为类型 (可选)
+
+        Returns:
+            行为历史列表
+        """
+        try:
+            params = {'user_id': user_id, 'limit': limit}
+            if behavior_type:
+                params['behavior_type'] = behavior_type
+
+            response = requests.get(
+                f"{self.base_url}/ai/recommendation/user/history",
+                params=params,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            if not result.get('success'):
+                raise RuntimeError(result.get('message', '获取行为历史失败'))
+
+            return result['data']['history']
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"调用行为历史服务失败: {str(e)}")
+
 
 # 创建全局实例
 recommendation_service = RecommendationService()

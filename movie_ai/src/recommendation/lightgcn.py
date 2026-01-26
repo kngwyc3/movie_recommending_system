@@ -100,6 +100,11 @@ class LightGCNRecommender:
         self.behavior_tracker = None
         self.decay_days = decay_days
         
+        # 评分数据（用于统计热门电影）
+        self.ratings_data = None
+        self.num_users = 0
+        self.num_items = 0
+        
         # 创建模型目录
         os.makedirs(model_dir, exist_ok=True)
     
@@ -170,6 +175,15 @@ class LightGCNRecommender:
         
         # 加载数据
         ratings, num_users, num_items = self._load_movielens_data(ml100k_path)
+        
+        # 保存评分数据用于统计
+        self.ratings_data = ratings
+        self.num_users = num_users
+        self.num_items = num_items
+
+        # 保存评分数据到文件（用于持久化）
+        self.save_ratings_data()
+        
         edge_index, num_edges = self._build_graph(ratings, num_users, num_items, min_rating)
         
         # 创建模型
@@ -305,14 +319,15 @@ class LightGCNRecommender:
         if self.item_embeddings is None:
             print("警告: 物品嵌入未加载，无法初始化行为追踪器")
             return
-        
+
         # 构建电影ID到向量的映射
         movie_embeddings = {i: self.item_embeddings[i] for i in range(len(self.item_embeddings))}
-        
+
         # 创建行为追踪器
         # 使用与前端匹配的0-10分制评分权重，映射到三个等级
         self.behavior_tracker = UserBehaviorTracker(
             decay_days=self.decay_days,
+            persist_dir=self.model_dir,  # 持久化目录
             behavior_weights={
                 'like': 1.0,             # 👍 喜欢 - 最高权重
                 'favorite': 0.8,         # ⭐ 收藏
@@ -326,6 +341,8 @@ class LightGCNRecommender:
                 'comment': 0.5,          # 💬 评论
             }
         )
+        # 设置电影嵌入
+        self.behavior_tracker.set_movie_embeddings(movie_embeddings)
         self.behavior_tracker.set_movie_embeddings(movie_embeddings)
         
         print(f"✓ 行为追踪器已初始化 (衰减天数: {self.decay_days})")
@@ -368,11 +385,19 @@ class LightGCNRecommender:
         """
         user_emb_path = os.path.join(self.model_dir, 'lightgcn_user_embeddings.npy')
         item_emb_path = os.path.join(self.model_dir, 'lightgcn_item_embeddings.npy')
-        
+
         if os.path.exists(user_emb_path) and os.path.exists(item_emb_path):
             self.user_embeddings = np.load(user_emb_path)
             self.item_embeddings = np.load(item_emb_path)
             print(f"已加载预训练嵌入: 用户={self.user_embeddings.shape}, 物品={self.item_embeddings.shape}")
+
+            # 加载评分数据
+            self.load_ratings_data()
+
+            # 将电影嵌入设置到行为追踪器
+            if self.use_behavior_tracking:
+                self._init_behavior_tracker()
+
             return True
         else:
             print("未找到预训练嵌入文件，需要先训练模型")
@@ -480,9 +505,43 @@ class LightGCNRecommender:
         # 获取 top-k
         top_indices = np.argsort(similarities)[::-1][:top_k]
         top_scores = similarities[top_indices]
-        
+
         return list(zip(top_indices.tolist(), top_scores.tolist()))
-    
+
+    def save_ratings_data(self):
+        """
+        保存评分数据到文件
+        """
+        if self.ratings_data is None:
+            return False
+
+        try:
+            ratings_path = os.path.join(self.model_dir, 'lightgcn_ratings_data.npy')
+            # 使用 object 类型保存列表数据
+            np.save(ratings_path, np.array(self.ratings_data, dtype=object))
+            print(f"已保存评分数据: {len(self.ratings_data)} 条记录")
+            return True
+        except Exception as e:
+            print(f"保存评分数据失败: {e}")
+            return False
+
+    def load_ratings_data(self):
+        """
+        从文件加载评分数据
+        """
+        try:
+            ratings_path = os.path.join(self.model_dir, 'lightgcn_ratings_data.npy')
+            if os.path.exists(ratings_path):
+                self.ratings_data = list(np.load(ratings_path, allow_pickle=True))
+                print(f"已加载评分数据: {len(self.ratings_data)} 条记录")
+                return True
+            else:
+                print("未找到评分数据文件")
+                return False
+        except Exception as e:
+            print(f"加载评分数据失败: {e}")
+            return False
+
     def find_similar_movies(self, movie_id, top_k=10):
         """
         查找与指定电影相似的电影
@@ -514,15 +573,36 @@ class LightGCNRecommender:
     
     def _get_popular_movies(self, top_k=10):
         """
-        获取热门电影（基于嵌入的 L2 范数）
-        简化实现，实际应该基于评分统计
+        获取热门电影（基于评分统计）
+
+        计算逻辑：
+        1. 统计每部电影的评分次数
+        2. 计算每部电影的平均评分
+        3. 综合评分次数和平均评分进行排序
+           - 综合分数 = 评分次数权重 * log(评分次数) + 平均评分权重 * 平均评分
         """
-        if self.item_embeddings is None:
-            raise ValueError("需要先训练模型或加载嵌入")
+        if self.ratings_data is None:
+            raise ValueError("需要先训练模型以加载评分数据")
         
-        # 计算每个物品嵌入的范数（简化方法）
-        norms = np.linalg.norm(self.item_embeddings, axis=1)
+        # 统计每部电影的评分次数和总分
+        movie_stats = {}
+        for user_id, item_id, rating in self.ratings_data:
+            if item_id not in movie_stats:
+                movie_stats[item_id] = {'count': 0, 'total': 0.0}
+            movie_stats[item_id]['count'] += 1
+            movie_stats[item_id]['total'] += rating
         
-        # 获取 top-k
-        top_indices = np.argsort(norms)[::-1][:top_k]
-        return list(zip(top_indices.tolist(), norms[top_indices].tolist()))
+        # 计算平均评分和综合分数
+        popular_movies = []
+        for movie_id, stats in movie_stats.items():
+            avg_rating = stats['total'] / stats['count']
+            # 综合分数：结合评分次数（热度）和平均评分（质量）
+            # 使用 log(count) 避免评分次数的影响过大
+            popularity_score = 0.6 * np.log(stats['count']) + 0.4 * avg_rating
+            popular_movies.append((movie_id, popularity_score, stats['count'], avg_rating))
+        
+        # 按综合分数降序排序
+        popular_movies.sort(key=lambda x: x[1], reverse=True)
+        
+        # 返回 top-k
+        return [(mid, float(score)) for mid, score, _, _ in popular_movies[:top_k]]

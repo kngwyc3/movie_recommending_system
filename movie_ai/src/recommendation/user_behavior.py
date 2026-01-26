@@ -13,17 +13,20 @@ from collections import defaultdict
 
 class UserBehaviorTracker:
     """用户行为追踪器"""
-    
-    def __init__(self, decay_days: int = 30, behavior_weights: Optional[Dict[str, float]] = None):
+
+    def __init__(self, decay_days: int = 30, behavior_weights: Optional[Dict[str, float]] = None,
+                 persist_dir: str = None):
         """
         初始化行为追踪器
-        
+
         Args:
             decay_days: 行为衰减天数，超过该天数的行为影响力降至0
             behavior_weights: 不同行为类型的权重配置
+            persist_dir: 行为数据持久化目录
         """
         self.decay_days = decay_days
-        
+        self.persist_dir = persist_dir
+
         # 默认行为权重配置
         # 前端评分是0-10分制，映射到三个等级
         self.behavior_weights = behavior_weights or {
@@ -38,15 +41,19 @@ class UserBehaviorTracker:
             'share': 0.6,            # 📤 分享
             'comment': 0.5,          # 💬 评论
         }
-        
+
         # 用户行为存储: {user_id: {movie_id: [(timestamp, behavior_type, metadata)]}}
         self.user_behaviors = defaultdict(lambda: defaultdict(list))
-        
+
         # 电影向量缓存（需要外部注入）
         self.movie_embeddings: Dict[int, np.ndarray] = {}
-        
+
         # 维度信息（需要外部注入）
         self.embedding_dim = None
+
+        # 自动加载持久化数据
+        if persist_dir:
+            self.load_behaviors()
     
     def set_movie_embeddings(self, movie_embeddings: Dict[int, np.ndarray]):
         """
@@ -89,6 +96,10 @@ class UserBehaviorTracker:
 
         timestamp = datetime.now()
         self.user_behaviors[user_id][movie_id].append((timestamp, behavior_type, metadata))
+
+        # 自动保存（每次记录后）
+        if self.persist_dir:
+            self.save_behaviors(user_id)
 
         return True
     
@@ -257,7 +268,100 @@ class UserBehaviorTracker:
         history.sort(key=lambda x: x['timestamp'], reverse=True)
         
         return history[:limit]
-    
+
+    def save_behaviors(self, user_id: int = None):
+        """
+        保存用户行为数据到文件
+
+        Args:
+            user_id: 用户ID，如果为None则保存所有用户数据
+        """
+        if self.persist_dir is None:
+            return False
+
+        try:
+            os.makedirs(self.persist_dir, exist_ok=True)
+
+            if user_id is None:
+                # 保存所有用户数据
+                file_path = os.path.join(self.persist_dir, 'user_behaviors.json')
+                data = {}
+                for uid, behaviors in self.user_behaviors.items():
+                    data[uid] = {}
+                    for mid, behavior_list in behaviors.items():
+                        data[uid][mid] = [
+                            {
+                                'timestamp': ts.isoformat(),
+                                'behavior_type': bt,
+                                'metadata': meta
+                            }
+                            for ts, bt, meta in behavior_list
+                        ]
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                return True
+            else:
+                # 保存单个用户数据
+                if user_id not in self.user_behaviors:
+                    return False
+
+                file_path = os.path.join(self.persist_dir, f'user_{user_id}_behaviors.json')
+                data = {}
+                for mid, behavior_list in self.user_behaviors[user_id].items():
+                    data[mid] = [
+                        {
+                            'timestamp': ts.isoformat(),
+                            'behavior_type': bt,
+                            'metadata': meta
+                        }
+                        for ts, bt, meta in behavior_list
+                    ]
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                return True
+
+        except Exception as e:
+            print(f"保存行为数据失败: {e}")
+            return False
+
+    def load_behaviors(self):
+        """
+        从文件加载用户行为数据
+        """
+        if self.persist_dir is None:
+            return False
+
+        try:
+            file_path = os.path.join(self.persist_dir, 'user_behaviors.json')
+            if not os.path.exists(file_path):
+                print("未找到行为数据文件")
+                return False
+
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # 解析数据并重建结构
+            for uid_str, behaviors in data.items():
+                user_id = int(uid_str)
+                for mid_str, behavior_list in behaviors.items():
+                    movie_id = int(mid_str)
+                    for item in behavior_list:
+                        timestamp = datetime.fromisoformat(item['timestamp'])
+                        behavior_type = item['behavior_type']
+                        metadata = item.get('metadata', {})
+                        self.user_behaviors[user_id][movie_id].append(
+                            (timestamp, behavior_type, metadata)
+                        )
+
+            print(f"已加载行为数据: {len(self.user_behaviors)} 个用户")
+            return True
+
+        except Exception as e:
+            print(f"加载行为数据失败: {e}")
+            return False
+
     def cleanup_old_behaviors(self, days: Optional[int] = None):
         """
         清理过期行为数据
