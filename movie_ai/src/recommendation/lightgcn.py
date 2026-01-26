@@ -425,28 +425,36 @@ class LightGCNRecommender:
     def _recommend_dynamic(self, user_id, top_k=10, exclude_seen=True, user_history=None):
         """
         基于动态用户向量推荐电影（推荐给有行为记录的用户）
-        
+
         参数:
             user_id: 用户ID
             top_k: 返回 top-k 推荐
             exclude_seen: 是否排除已看过的电影
             user_history: 用户历史（用于排除）
-        
+
         返回:
             List[Tuple[int, float]]: [(movie_id, score), ...]
         """
         if self.item_embeddings is None:
             raise ValueError("需要先训练模型或加载嵌入")
-        
+
         if self.behavior_tracker is None:
             raise ValueError("行为追踪器未初始化")
-        
-        # 计算动态用户向量
-        user_emb = self.behavior_tracker.compute_user_vector(user_id)
-        
+
+        # 获取预训练用户嵌入
+        pretrained_emb = None
+        if self.user_embeddings is not None and user_id < len(self.user_embeddings):
+            pretrained_emb = self.user_embeddings[user_id]
+
+        # 计算动态用户向量（加权融合预训练嵌入和行为向量）
+        user_emb = self.behavior_tracker.compute_user_vector(
+            user_id,
+            pretrained_embedding=pretrained_emb
+        )
+
+        # 如果没有行为数据且没有预训练嵌入，回退到静态推荐
         if user_emb is None:
-            # 如果没有足够的行为数据，回退到静态推荐
-            print(f"用户 {user_id} 行为数据不足，使用静态推荐")
+            print(f"用户 {user_id} 行为数据不足且无预训练嵌入，使用静态推荐")
             if user_history:
                 return self.recommend(user_history, top_k, exclude_seen)
             else:

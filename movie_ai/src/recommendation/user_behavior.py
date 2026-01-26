@@ -131,68 +131,96 @@ class UserBehaviorTracker:
         
         return max(0.0, decay)
     
-    def compute_user_vector(self, user_id: int, 
+    def compute_user_vector(self, user_id: int,
                            current_time: Optional[datetime] = None,
-                           min_behaviors: int = 1) -> Optional[np.ndarray]:
+                           min_behaviors: int = 1,
+                           pretrained_embedding: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
         """
         基于用户行为计算动态用户向量
-        
+
         Args:
             user_id: 用户ID
             current_time: 当前时间（默认为现在）
             min_behaviors: 最少行为数量，少于则返回None
-        
+            pretrained_embedding: 预训练用户嵌入向量（用于加权融合）
+
         Returns:
             用户向量或None
         """
         if user_id not in self.user_behaviors:
             return None
-        
+
         # 收集所有行为
         all_behaviors = []
         for movie_id, behavior_list in self.user_behaviors[user_id].items():
             all_behaviors.extend([(movie_id, b[0], b[1], b[2]) for b in behavior_list])
-        
-        if len(all_behaviors) < min_behaviors:
+
+        # 如果没有提供预训练嵌入且行为不足，返回None
+        if pretrained_embedding is None and len(all_behaviors) < min_behaviors:
             return None
-        
+
         if self.embedding_dim is None:
             raise ValueError("Embedding dimension not set. Call set_movie_embeddings first.")
-        
-        # 初始化用户向量
-        user_vector = np.zeros(self.embedding_dim)
+
+        # 计算基于行为的用户向量
+        behavior_vector = np.zeros(self.embedding_dim)
         total_weight = 0.0
-        
-        # 累加加权电影向量
+
         for movie_id, timestamp, behavior_type, metadata in all_behaviors:
             # 获取电影向量
             if movie_id not in self.movie_embeddings:
                 continue
-            
+
             movie_embedding = self.movie_embeddings[movie_id]
-            
+
             # 获取行为权重
             behavior_weight = self.get_behavior_weight(behavior_type)
-            
+
             # 获取时间衰减
             time_decay = self.calculate_time_decay(timestamp, current_time)
-            
+
             # 计算综合权重
             combined_weight = behavior_weight * time_decay
-            
+
             # 累加
-            user_vector += combined_weight * movie_embedding
+            behavior_vector += combined_weight * movie_embedding
             total_weight += combined_weight
-        
-        # 归一化
+
+        # 归一化行为向量
         if total_weight > 0:
-            user_vector = user_vector / total_weight
-            
+            behavior_vector = behavior_vector / total_weight
+
             # L2归一化
-            norm = np.linalg.norm(user_vector)
+            norm = np.linalg.norm(behavior_vector)
             if norm > 0:
-                user_vector = user_vector / norm
-        
+                behavior_vector = behavior_vector / norm
+
+        # 如果没有预训练嵌入，直接返回行为向量
+        if pretrained_embedding is None:
+            return behavior_vector
+
+        # 计算加权融合系数α（根据行为数量动态调整）
+        behavior_count = len(all_behaviors)
+        if behavior_count <= 10:
+            alpha = 0.7  # 行为少时，预训练权重高
+        elif behavior_count <= 20:
+            alpha = 0.5  # 行为中量，权重平衡
+        else:
+            alpha = 0.3  # 行为多时，行为权重高
+
+        # 归一化预训练嵌入
+        pretrained_norm = np.linalg.norm(pretrained_embedding)
+        if pretrained_norm > 0:
+            pretrained_embedding = pretrained_embedding / pretrained_norm
+
+        # 加权融合: user_emb = α * pretrained_emb + (1-α) * behavior_emb
+        user_vector = alpha * pretrained_embedding + (1 - alpha) * behavior_vector
+
+        # 最终L2归一化
+        final_norm = np.linalg.norm(user_vector)
+        if final_norm > 0:
+            user_vector = user_vector / final_norm
+
         return user_vector
     
     def get_user_behavior_history(self, user_id: int, 
